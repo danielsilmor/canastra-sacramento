@@ -1,0 +1,99 @@
+# Canastra Sacramentana: versão de teste (MVP)
+
+Jogo de Canastra no navegador, seguindo o regulamento da modalidade personalizada.
+Você joga em dupla com a Beatriz (computador) contra João e Rafael, também do computador.
+
+## Do que você precisa
+
+**Só de um navegador** (Google Chrome ou Microsoft Edge). Não é preciso instalar nada.
+
+Opcional, para quem quiser mexer no código:
+- **Visual Studio Code** (gratuito): editor para abrir e alterar os arquivos (https://code.visualstudio.com)
+- **Git** (já está instalado neste computador): guarda o histórico de versões do projeto.
+
+## Como jogar
+
+1. Abra a pasta `Canastra Sacramentana`.
+2. Dê dois cliques em **`index.html`**. O jogo abre no navegador e a primeira rodada começa sozinha.
+
+Na sua vez:
+1. **Comprar:** clique no **monte** (ou arraste o monte para a sua mão, ou use o botão "Comprar do monte").
+   Para **pegar o lixo**: selecione 2 ou mais cartas da mão que formem sequência com a carta do topo e clique no lixo (ou no botão "Pegar lixo"). Se essas cartas encaixarem num jogo que a dupla já tem, elas vão para esse jogo; para escolher o jogo, clique nele (ou arraste o lixo até ele). Também dá para arrastar o lixo para a mão depois de selecionar as cartas.
+2. **Baixar (opcional):** clique nas cartas para selecioná-las (elas sobem e ganham borda vermelha) e depois:
+   - clique no painel **"Nós"** (ou arraste as cartas até ele) para baixar uma sequência nova;
+   - clique num **jogo já baixado** (ou arraste as cartas até ele) para acrescentar.
+   O botão "Baixar sequência" continua funcionando.
+   **Várias sequências de uma vez:** selecione todas as cartas juntas (inclusive ao pegar o lixo). O jogo separa sozinho em sequências por naipe e coloca cada curinga onde ele faz falta, no máximo 1 por sequência. Exemplo: 10♠ do lixo + 8♠ 2♠ 8♣ 9♣ J♣ Q♣ 2♦ da mão viram **8♠ 2♠ 10♠** e **8♣ 9♣ 2♦ J♣ Q♣**.
+3. **Descartar:** selecione 1 carta e clique no **lixo** (ou arraste a carta até o lixo, ou use o botão "Descartar").
+
+Só dá para selecionar e mexer nas cartas na sua vez. Se tentar fora de hora, aparece um aviso explicando o motivo
+(por exemplo, "Ainda não é a sua vez" ou "Primeiro compre uma carta").
+
+Enquanto a dupla não abriu, as sequências ficam "separadas" num quadro amarelo tracejado até somarem os 80 pontos
+(120 se a dupla estiver VU) **ou até um dos jogos virar canastra** (7 cartas, limpa ou suja): a canastra já vale mais
+que o mínimo, então abre o jogo sozinha, mesmo somando menos de 80 em cartas. Aí a abertura é feita automaticamente. Dentro do quadro amarelo dá para remanejar:
+- **Acrescentar cartas:** selecione cartas da mão (pode ser só 1, como um 7 ou um coringuinha) e clique num jogo do quadro amarelo (ou arraste as cartas até ele).
+- **Sequência nova:** com 3 ou mais cartas selecionadas, clique no quadro amarelo fora dos jogos ou no painel "Nós".
+- **Desfazer um jogo:** o botão "Desfazer" embaixo de cada jogo devolve as cartas para a mão. Se o jogo tiver a carta do lixo, ela continua no lixo e você volta a escolher: comprar do monte ou pegar o lixo de novo (os outros jogos separados continuam no quadro).
+- **Devolver uma carta só:** sem nenhuma carta selecionada, clique numa carta de um jogo do quadro amarelo para ela voltar para a mão (se o jogo continuar válido sem ela).
+- **Cancelar abertura** devolve tudo de uma vez.
+
+**Escolher onde ficam os curingas:** quando as cartas selecionadas podem ser montadas de mais de um jeito
+(por exemplo, K♥ A♥ Q♦ K♦ + coringão + coringuinha), ao baixar ou pegar o lixo aparece a janela
+**"Como você quer montar?"** com as opções desenhadas: os curingas ficam com contorno amarelo e cada jogo mostra se fica limpo ou sujo. Clique na opção que quiser.
+
+O botão **Regras** mostra um resumo das regras.
+
+### Acompanhando as jogadas
+
+- As cartas são **animadas**: distribuição, compra, descarte, baixar sequências e pegar o lixo.
+- Na coluna da esquerda fica o **histórico**. A setinha ▲ esconde o histórico, e a setinha ▼ mostra de novo.
+- Abaixo do histórico fica o **quadro da jogada**, que diz de quem é a vez, narra cada jogada e tem o botão **Continuar**.
+- No ritmo **Passo a passo** (padrão), cada computador faz a jogada completa (comprar, baixar e descartar, tudo animado) e depois espera você clicar em **Continuar** (ou apertar Enter). O quadro mostra o resumo de tudo o que ele fez.
+- No alto da mesa ficam os 4 jogadores **na ordem em que jogam** (Você → João → Beatriz → Rafael), cada um com uma pilha de cartas (mais grossa quanto mais cartas tiver) e o número exato. O "D" indica o carteador.
+- O jogador da vez fica com contorno amarelo e a etiqueta "jogando". Na sua vez, o contorno e a etiqueta ficam verdes.
+- As cartas da última jogada ficam com **brilho amarelo**. Cartas com **pontinho laranja** são curingas (2 e coringão).
+- Na **engrenagem** (⚙, no topo) ficam as configurações: o **ritmo do jogo** (passo a passo ou automático lento, normal ou rápido, sem confirmações) e a **inteligência de cada bot**. As escolhas ficam guardadas no navegador.
+
+### Inteligência dos bots
+
+Cada bot (João, Beatriz e Rafael) pode ter um nível diferente. O nível aparece no quadro do jogador, ao lado do papel (por exemplo, "adversário · Mestre"). A mudança vale a partir da próxima jogada do bot.
+
+| Nível | Como joga |
+|---|---|
+| **Iniciante** | Bom senso, mas comete erros de propósito: às vezes não pega o lixo, demora para baixar ou descarta uma carta útil. |
+| **Moderado** (padrão) | Prefere aumentar os jogos da mesa a baixar várias sequências pequenas (guarda trincas na mão para pegar o lixo). Usa curinga (coringão ou coringuinha) para fechar canastra com 6 cartas, em vez de pegar o lixo. Descarta cartas baixas e só solta o Ás em último caso. |
+| **Estratégico** | Antes de comprar e de descartar, imagina dezenas de continuações da rodada para cada opção (sorteando as cartas que não vê) e escolhe a que rende mais pontos. Do lixo, só conhece a carta de cima. |
+| **Mestre** | Como o Estratégico, mas decora o lixo inteiro e as cartas que cada jogador pegou dele, então imagina as mãos dos outros com mais acerto. |
+
+Nenhum bot trapaceia: nenhum vê a sua mão, a mão dos outros ou a ordem do monte.
+- O visual usa a fonte Inter, que vem da internet. Sem internet, o jogo funciona normalmente com a fonte do sistema.
+
+## Decisões tomadas onde o regulamento não era explícito
+
+- **Só o coringuinha (2) deixa a sequência suja.** Sequência ou canastra com coringão continua **limpa** (500). Esta regra muda o que está escrito no PDF, que considera suja a sequência com qualquer curinga.
+- **Coringuinha (2) e coringão também travam o lixo**: descartados, o próximo jogador não pode pegar o lixo, igual ao 3 preto.
+- Na 1ª compra da rodada, a carta recusada **vai para o lixo**. Se a carta comprada for um **3** (preto ou vermelho) ou um curinga (**coringuinha (2)** ou **coringão**), não dá para trocar.
+- Para pegar o lixo, a carta do topo e **pelo menos 2 cartas da mão** precisam formar uma sequência entre si. Esse trio pode virar um **jogo novo** ou ser **encaixado num jogo que a dupla já baixou** (por exemplo: jogo 4♠ 5♠ 6♠ na mesa, topo 7♠, mão 8♠ 9♠ → o jogo vira 4♠ a 9♠). Não vale encaixar só o topo, sem as 2 cartas da mão. Vale para você e para os computadores.
+- O curinga também pode entrar na sequência de Ases (máximo de 1 por sequência).
+- O curinga numa sequência se ajusta sozinho: ele tapa o buraco ou vai para a ponta.
+- Caso raro: se o monte acabar num 3 vermelho e o jogador ficar com só 1 carta sem poder bater, ele descarta e a rodada termina pelo fim do monte (sem bônus de bate).
+
+## Como o projeto está organizado
+
+| Arquivo | O que faz |
+|---|---|
+| `index.html` | A página do jogo (a mesa). É o arquivo que você abre. |
+| `css/style.css` | O visual: mesa verde, cartas, botões. |
+| `js/cards.js` | O baralho: as 106 cartas, valores, embaralhar. |
+| `js/rules.js` | As regras: o que é sequência válida, abertura, canastra, pontuação. |
+| `js/game.js` | A partida: distribuição, vez de cada um, compra, lixo, descarte, fim da rodada, placar. |
+| `js/ai.js` | Como os bots jogam: os quatro níveis de inteligência. |
+| `js/ui.js` | Desenha a mesa e responde aos seus cliques. |
+| `tests.html` | Testes automáticos: abra no navegador para conferir as regras (✅/❌). Também simula 20 partidas só com computadores. |
+
+## Próximos passos possíveis
+
+- Ajustar regras depois de testar a dinâmica.
+- Animações e sons.
+- Multijogador (várias pessoas, cada uma no seu computador). Isso exigirá um servidor e a instalação do Node.js.

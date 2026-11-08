@@ -1,0 +1,602 @@
+/*
+ * style.css — Visual do jogo
+ * Tema escuro e minimalista: fundo preto, painéis cinza-escuro arredondados,
+ * cartas brancas com o valor grande e verso listrado.
+ */
+
+:root {
+  --bg: #000;
+  --surface: #1c1c1e;     /* painéis e botões */
+  --surface-2: #2c2c2e;   /* botão ao passar o mouse, etiquetas */
+  --surface-3: #3a3a3c;
+  --text: #f5f5f7;
+  --text-2: #d1d1d6;
+  --muted: #8e8e93;
+  --muted-2: #636366;
+  --line: rgba(255, 255, 255, 0.08);
+  --yellow: #ffd60a;
+  --green: #30d158;
+  --orange: #ff9f0a;
+  --danger: #ff453a;
+  --card: #fafafa;
+  --card-ink: #111;
+  --card-red: #ff3b30;
+  --card-w: 70px;
+  --card-h: 100px;
+  --radius: 20px;
+  --pad: 28px;
+  --side: 320px;
+}
+
+* { box-sizing: border-box; }
+
+html { scrollbar-color: var(--surface-3) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: "Inter", -apple-system, "SF Pro Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: "tnum" 1;
+  -webkit-font-smoothing: antialiased;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* ---------- Botões ---------- */
+button {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: none;
+  border-radius: 16px;
+  height: 46px;
+  padding: 0 20px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+button:hover:not(:disabled) { background: var(--surface-2); }
+button:disabled { opacity: 0.35; cursor: not-allowed; }
+button.btn-primary { background: var(--card); color: #000; }
+button.btn-primary:hover:not(:disabled) { background: #e5e5ea; }
+button.btn-danger { color: var(--danger); }
+button.btn-light { color: var(--text-2); }
+button.btn-small { height: 36px; border-radius: 12px; padding: 0 16px; font-size: 14px; }
+button.btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 11px;
+  color: var(--text-2);
+}
+button.btn-icon:hover:not(:disabled) { background: var(--surface-3); }
+
+select {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238e8e93' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 14px center;
+  border: none;
+  border-radius: 12px;
+  height: 36px;
+  padding: 0 36px 0 14px;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* ---------- Barra superior ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 16px var(--pad) 12px;
+}
+.brand-title { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
+.brand-sub { font-size: 13px; color: var(--muted); margin-top: 1px; }
+.scoreboard { display: flex; gap: 36px; margin: 0 auto; }
+.score { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.score .label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.score .value { font-size: 21px; font-weight: 500; }
+.score.us .value { color: var(--text); }
+/* Meta: discreta, para não competir com o placar */
+.score.meta { justify-content: center; padding-left: 28px; border-left: 1px solid var(--line); }
+.score.meta .label { font-size: 12px; color: var(--muted-2); }
+.score.meta .value { font-size: 13px; font-weight: 400; color: var(--muted); }
+.topbar-actions { display: flex; gap: 10px; align-items: center; }
+/* Botão de engrenagem (configurações) */
+button.btn-gear { width: 36px; padding: 0; display: flex; align-items: center; justify-content: center; color: var(--text-2); }
+button.btn-gear svg { transition: transform 0.3s; }
+button.btn-gear:hover svg { transform: rotate(60deg); }
+
+/* ---------- Etiquetas ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chip.green { color: var(--green); background: rgba(48, 209, 88, 0.12); }
+.chip.yellow { color: var(--yellow); background: rgba(255, 214, 10, 0.12); }
+.chip.red { color: var(--danger); background: rgba(255, 69, 58, 0.14); }
+.chip.tiny { font-size: 10px; padding: 2px 7px; }
+
+/* ---------- Mesa ---------- */
+.table {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--side) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "side players"
+    "side board";
+  gap: 16px 24px;
+  padding: 4px var(--pad) 0;
+}
+
+/* Jogadores */
+.players { grid-area: players; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.player {
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1.5px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  transition: background 0.2s, border-color 0.2s;
+}
+.player .top { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+.player .name { font-size: 14px; color: var(--muted); font-weight: 500; }
+.player .role { font-size: 12px; color: var(--muted-2); }
+.player .dealer {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.player .mid { display: flex; align-items: center; gap: 10px; }
+.player .stack { position: relative; height: 34px; flex: none; }
+.player .stack .card { position: absolute; top: 0; }
+.player .count { font-size: 22px; font-weight: 500; }
+.player .unit { font-size: 13px; color: var(--muted); }
+.player.active { background: var(--surface); border-color: var(--yellow); }
+.player.active .name { color: var(--text); }
+.player .playing { margin-left: auto; }
+.player.active.me { border-color: var(--green); }
+
+/* Tabuleiro: jogos das duplas, monte e lixo */
+/* Duas linhas (Eles em cima, Nós embaixo) e o monte/lixo à direita, entre as duas. */
+.board {
+  grid-area: board;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 32px;
+  min-height: 0;
+}
+#team-1 { grid-column: 1; grid-row: 1; }
+#team-0 { grid-column: 1; grid-row: 2; }
+.panel { background: var(--surface); border-radius: var(--radius); padding: 16px 20px; }
+.team-area { min-height: 0; overflow: auto; }
+.panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.panel-title { font-size: 15px; font-weight: 600; }
+.panel-sub { font-size: 13px; color: var(--muted); }
+.panel-header .chip { margin-left: auto; }
+
+.melds { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-start; }
+.meld {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 6px;
+  margin: -6px;
+  border-radius: 14px;
+  border: 1.5px solid transparent;
+}
+.meld .cards-row, .meld .red-threes { display: flex; }
+.meld .cards-row .card + .card,
+.meld .red-threes .card + .card { margin-left: -26px; box-shadow: -3px 0 8px rgba(0, 0, 0, 0.18); }
+.meld-info { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.meld.clickable { cursor: pointer; border-color: rgba(255, 69, 58, 0.55); border-style: dashed; }
+.meld.clickable:hover { background: rgba(255, 69, 58, 0.08); }
+/* Painel "Nós" pronto para receber uma sequência nova (clique ou soltar cartas) */
+.team-area.clickable { cursor: pointer; box-shadow: inset 0 0 0 1.5px rgba(255, 69, 58, 0.45); }
+.team-area.clickable:hover { box-shadow: inset 0 0 0 1.5px var(--danger); }
+/* Onde as cartas arrastadas vão cair */
+.drop-over { outline: 2px dashed var(--danger); outline-offset: 4px; }
+.team-area.drop-over, .hand.drop-over { outline-offset: -6px; background-color: rgba(255, 69, 58, 0.06); }
+.meld.drop-over { background: rgba(255, 69, 58, 0.1); }
+.empty-note { font-size: 13px; color: var(--muted-2); }
+
+/* Monte em cima do lixo, numa coluna à direita da mesa */
+.piles {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding-right: 4px;
+}
+.pile { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.pile-meta { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.pile-meta b { color: var(--text); font-weight: 500; font-size: 15px; }
+
+/* Pilha: cartas de baixo deslocadas para dar volume; a de cima é a única que reage */
+.pile-stack { position: relative; }
+.pile-stack .card { position: absolute; top: 0; left: 0; }
+.pile-stack .under { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+.pile-stack .top { transition: transform 0.15s; }
+.pile.clickable .pile-stack .top { cursor: pointer; box-shadow: 0 0 0 3px var(--danger); }
+.pile.clickable .pile-stack .top:hover { transform: translateY(-10px); }
+.pile.clickable { cursor: pointer; }
+.pile.clickable .empty-slot { border-color: var(--danger); }
+.empty-slot { width: var(--card-w); height: var(--card-h); border: 1.5px dashed var(--surface-3); border-radius: 14px; }
+
+/* Coluna da direita: narração e histórico */
+.side { grid-area: side; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.narration { display: flex; flex-direction: column; gap: 8px; min-height: 150px; padding: 20px; }
+.narration .label { font-size: 13px; color: var(--muted); }
+.narration .who { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; }
+.narration .who.mine { color: var(--green); }
+.narration .what { font-size: 14px; color: var(--text-2); line-height: 1.5; white-space: pre-line; margin-top: 4px; max-height: 260px; overflow: auto; }
+.narration button { margin-top: 8px; width: 100%; }
+.narration kbd { font: inherit; font-size: 12px; color: #6e6e73; margin-left: 6px; }
+.narration.waiting { box-shadow: inset 0 0 0 1.5px var(--yellow); }
+
+.log { flex: 1; min-height: 0; overflow: auto; padding: 14px 18px; }
+.log.collapsed { flex: none; overflow: hidden; }
+.log.collapsed ol { display: none; }
+.log-header { display: flex; align-items: center; justify-content: space-between; }
+.log h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.log ol { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; }
+.log li { position: relative; padding: 8px 0 8px 16px; border-bottom: 1px solid var(--line); color: var(--text-2); line-height: 1.4; }
+.log li:last-child { border-bottom: none; }
+.log li::before { content: ""; position: absolute; left: 0; top: 14px; width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); }
+.log li.team-0::before { background: var(--green); }
+.log li.team-1::before { background: var(--orange); }
+.log li.system { color: var(--muted); }
+
+/* ---------- Cartas ---------- */
+.card {
+  width: var(--card-w);
+  height: var(--card-h);
+  background: var(--card);
+  border-radius: 14px;
+  position: relative;
+  color: var(--card-ink);
+  flex: none;
+  user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.card .rank { position: absolute; top: 10px; left: 11px; font-size: 30px; font-weight: 400; line-height: 1; letter-spacing: -1px; }
+.card .suit { position: absolute; bottom: 11px; left: 11px; font-size: 23px; line-height: 1; }
+.card.red { color: var(--card-red); }
+.card.joker { color: #5e5ce6; }
+.card.joker .rank { font-size: 24px; letter-spacing: -0.5px; }
+.card .suit svg { display: block; width: 1.3em; height: 1.3em; margin-left: -0.1em; }
+/* Pontinho laranja = curinga */
+.card.wild::before {
+  content: "";
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
+.card.small { width: 46px; height: 66px; border-radius: 9px; }
+.card.small .rank { font-size: 19px; top: 6px; left: 7px; letter-spacing: -0.6px; }
+.card.small .suit { font-size: 15px; bottom: 7px; left: 7px; }
+.card.small.joker .rank { font-size: 15px; }
+.card.small.wild::before { top: 7px; right: 6px; width: 6px; height: 6px; }
+
+/* Verso: listras diagonais vermelhas, linha e espaço com a mesma espessura */
+.card.back::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 8px;
+  background: repeating-linear-gradient(135deg, var(--card-red) 0 3px, transparent 3px 6px);
+}
+.card.small.back::after { inset: 5px; border-radius: 5px; background: repeating-linear-gradient(135deg, var(--card-red) 0 2px, transparent 2px 4px); }
+.card.mini { width: 24px; height: 34px; border-radius: 5px; box-shadow: -2px 0 4px rgba(0, 0, 0, 0.45); }
+.card.mini.back::after { inset: 3px; border-radius: 3px; background: repeating-linear-gradient(135deg, var(--card-red) 0 1.5px, transparent 1.5px 3px); }
+
+.card.fresh { box-shadow: 0 0 0 3px var(--yellow), 0 0 22px rgba(255, 214, 10, 0.45); }
+.card.flying {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  transform-origin: top left;
+  margin: 0 !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- Zona do jogador ---------- */
+.player-zone {
+  display: grid;
+  grid-template-columns: var(--side) minmax(0, 1fr);
+  grid-template-areas: "actions main";
+  gap: 24px;
+  padding: 16px var(--pad) 20px;
+}
+.player-main { grid-area: main; min-width: 0; }
+.status-row { display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; min-height: 22px; }
+.status { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.player-zone.active .status { color: var(--green); }
+.player-zone.active .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.message { font-size: 14px; color: var(--muted); }
+.message.error { color: var(--danger); font-weight: 500; }
+.message.ok { color: var(--green); }
+
+.staging {
+  display: none;
+  gap: 14px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1.5px dashed rgba(255, 214, 10, 0.5);
+  flex-wrap: wrap;
+}
+.staging.visible { display: flex; }
+.staging .stage-title { font-size: 13px; font-weight: 600; color: var(--yellow); line-height: 1.4; }
+.staging .stage-title small { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.staging.clickable { cursor: pointer; border-color: rgba(255, 69, 58, 0.55); }
+.staging.clickable:hover { background: rgba(255, 69, 58, 0.05); }
+.staging.drop-over { outline-offset: 2px; background: rgba(255, 69, 58, 0.06); }
+/* Botão pequeno "Desfazer" embaixo de cada jogo da abertura */
+button.meld-undo {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+button.meld-undo:hover:not(:disabled) { background: var(--surface-3); color: var(--danger); }
+/* Carta da área amarela que pode voltar para a mão (clique) */
+.staging .card.removable { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+.staging .card.removable:hover { transform: translateY(-8px); box-shadow: 0 0 0 2px var(--danger), -3px 0 8px rgba(0, 0, 0, 0.18); }
+
+/* Janela "Como você quer montar?": cada opção é um quadro clicável */
+.arrangements { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.arrangement {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 12px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.arrangement:hover, .arrangement:focus-visible { border-color: var(--danger); background: var(--surface-3); outline: none; }
+.arrangement .arr-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.arrangement .arr-melds { display: flex; flex-wrap: wrap; gap: 14px 28px; }
+.arrangement .meld { margin: 0; padding: 0; }
+.arrangement .meld-info .clean { color: var(--green); }
+.card.pick-wild { box-shadow: 0 0 0 2.5px var(--yellow), -3px 0 8px rgba(0, 0, 0, 0.18); }
+
+.hand { display: flex; flex-wrap: wrap; padding-top: 20px; min-height: 124px; row-gap: 10px; }
+.hand .card { margin-right: -14px; cursor: pointer; transition: transform 0.15s; box-shadow: -4px 0 12px rgba(0, 0, 0, 0.22); }
+.hand .card:hover { transform: translateY(-6px); }
+.hand.locked .card { cursor: default; }
+.hand.locked .card:hover { transform: none; }
+.hand .card.selected { transform: translateY(-16px); box-shadow: 0 0 0 3px var(--danger), -4px 0 12px rgba(0, 0, 0, 0.22); }
+.hand .card.fresh { box-shadow: 0 0 0 3px var(--yellow), 0 0 22px rgba(255, 214, 10, 0.45); }
+.hand .card.selected.fresh { box-shadow: 0 0 0 3px var(--danger), -4px 0 12px rgba(0, 0, 0, 0.22); }
+.hand .card.new::after {
+  content: "nova";
+  position: absolute;
+  bottom: 9px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--yellow);
+  color: #000;
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+.actions { grid-area: actions; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; padding-top: 32px; }
+.actions button { padding: 0 12px; font-size: 14px; }
+.actions button:only-of-type { grid-column: 1 / -1; }
+.actions button.full { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.actions button.full svg { flex: none; }
+.actions .hint { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+
+/* ---------- Cartas citadas nos textos (histórico e quadro da jogada) ---------- */
+.cardtag {
+  display: inline-block;
+  background: var(--card);
+  color: var(--card-ink);
+  border-radius: 5px;
+  padding: 0 5px;
+  margin: 1px 1px;
+  font-size: 0.92em;
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.cardtag.red { color: var(--card-red); }
+.cardtag.joker { color: #5e5ce6; }
+
+/* ---------- Aviso flutuante ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 190px;
+  transform: translate(-50%, 12px);
+  max-width: 560px;
+  width: max-content;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid rgba(255, 69, 58, 0.5);
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 14px;
+  line-height: 1.45;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 40;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Janelas (modal) ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  padding: 16px;
+}
+.modal.hidden { display: none; }
+.modal-box {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 24px;
+  padding: 28px 32px;
+  max-width: 640px;
+  width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+}
+.modal-box h2 { margin: 0 0 6px; font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+.modal-box h3 { margin: 22px 0 8px; font-size: 15px; font-weight: 600; }
+.modal-box p { color: var(--muted); margin: 6px 0; font-size: 14px; }
+.modal-box p strong { color: var(--text); font-size: 17px; }
+.modal-box table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+.modal-box th { color: var(--muted); font-weight: 500; font-size: 13px; }
+.modal-box th, .modal-box td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+.modal-box th:first-child, .modal-box td:first-child { text-align: left; }
+.modal-box td:first-child { color: var(--text-2); }
+.modal-box tr.total td { font-weight: 600; color: var(--text); border-bottom: none; border-top: 1px solid var(--surface-3); }
+.modal-box ul { padding-left: 18px; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+.modal-box li { margin-bottom: 5px; }
+/* Placar acumulado em destaque */
+.modal-box .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0 6px; }
+.hero-score { background: var(--surface-2); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; }
+.hero-score .label { font-size: 13px; color: var(--muted); }
+.hero-score .value { font-size: 36px; font-weight: 600; letter-spacing: -0.8px; line-height: 1.15; }
+.hero-score .delta { font-size: 13px; color: var(--muted); }
+.hero-score.us { box-shadow: inset 0 0 0 1.5px rgba(48, 209, 88, 0.55); }
+
+/* Cartas que ficaram na mão: recolhido, com um botão + para expandir (vira − quando aberto) */
+.hands-box { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.hands-box summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  margin: 0 -10px;
+  border-radius: 14px;
+  transition: background 0.15s;
+}
+.hands-box summary:hover { background: var(--surface-2); }
+.hands-box summary::-webkit-details-marker { display: none; }
+/* O "+" é desenhado com duas barras (sempre centralizado, qualquer que seja a fonte) */
+.hands-box summary::before {
+  content: "";
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background:
+    linear-gradient(#000, #000) center / 12px 2px no-repeat,
+    linear-gradient(#000, #000) center / 2px 12px no-repeat,
+    var(--card);
+  transition: transform 0.15s;
+}
+.hands-box summary:hover::before { transform: scale(1.08); }
+/* Aberto: só a barra deitada (vira "−") */
+.hands-box[open] summary::before {
+  background:
+    linear-gradient(#000, #000) center / 12px 2px no-repeat,
+    var(--card);
+}
+.hands-box summary .count { font-size: 12px; font-weight: 500; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 1px 8px; }
+.modal-box .hands { list-style: none; padding: 0; margin: 12px 0 0; }
+.modal-box .hands li { display: flex; gap: 12px; align-items: baseline; padding: 6px 0; }
+.modal-box .hands li b { min-width: 64px; color: var(--text-2); font-weight: 500; }
+.modal-box .hands .none { color: var(--muted); font-size: 13px; }
+.modal-box button { background: var(--surface-2); }
+.modal-box button:hover:not(:disabled) { background: var(--surface-3); }
+.modal-box button.btn-primary { background: var(--card); color: #000; }
+.modal-box .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* Página de configurações */
+.modal-box .set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.modal-box .set-who { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.modal-box .set-who b { font-weight: 600; }
+.modal-box .set-who span { color: var(--muted); font-size: 13px; }
+.modal-box .set-row select { flex: none; min-width: 190px; background-color: var(--surface-2); }
+.modal-box .set-note { font-size: 13px; margin-top: 12px; }
+.modal-box .set-help { margin-top: 10px; }
+.modal-box .set-help ul { margin: 10px 0 0; padding-left: 18px; }
+.modal-box .set-help li { margin-bottom: 8px; }
+
+/* ---------- Telas menores ---------- */
+@media (max-width: 1100px) {
+  body { overflow: auto; height: auto; min-height: 100vh; }
+  .table { grid-template-columns: minmax(0, 1fr); grid-template-areas: "players" "board" "side"; }
+  .board { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+  #team-1, #team-0, .piles { grid-column: 1; grid-row: auto; }
+  .piles { justify-self: center; }
+  .team-area { min-height: 130px; }
+  .log { max-height: 220px; }
+  .player-zone { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "actions"; }
+  .actions { padding-top: 0; }
+  .topbar { flex-wrap: wrap; gap: 16px; }
+  .scoreboard { order: 3; width: 100%; justify-content: space-around; margin: 0; }
+}
+@media (max-width: 640px) {
+  :root { --pad: 16px; }
+  .players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

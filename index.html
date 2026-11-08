@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canastra Sacramentana</title>
+  <!-- Fonte Inter (parecida com a do iPhone). Sem internet, o navegador usa a fonte do sistema. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-title">Canastra</div>
+      <div class="brand-sub">Sacramentana</div>
+    </div>
+    <div class="scoreboard" id="scoreboard"></div>
+    <div class="topbar-actions">
+      <button id="btn-settings" class="btn-small btn-gear" title="Configurações: ritmo do jogo e inteligência dos bots" aria-label="Configurações">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <button id="btn-rules" class="btn-small">Regras</button>
+      <button id="btn-new" class="btn-small">Nova partida</button>
+    </div>
+  </header>
+
+  <main class="table">
+    <!-- Jogadores na ordem em que jogam -->
+    <section class="players">
+      <div class="player" id="seat-0"></div>
+      <div class="player" id="seat-1"></div>
+      <div class="player" id="seat-2"></div>
+      <div class="player" id="seat-3"></div>
+    </section>
+
+    <section class="board">
+      <div class="panel team-area" id="team-1"></div>
+      <div class="piles" id="piles"></div>
+      <div class="panel team-area" id="team-0"></div>
+    </section>
+
+    <aside class="side">
+      <div class="panel log" id="log-panel">
+        <div class="log-header">
+          <h3>Histórico</h3>
+          <button id="btn-log-toggle" class="btn-icon" title="Ocultar histórico">▲</button>
+        </div>
+        <ol id="log"></ol>
+      </div>
+      <div id="narration"></div>
+    </aside>
+  </main>
+
+  <footer class="player-zone">
+    <div class="player-main">
+      <div class="status-row">
+        <div class="status" id="status"></div>
+        <div class="message" id="message"></div>
+      </div>
+      <div class="staging" id="staging"></div>
+      <div class="hand" id="hand"></div>
+    </div>
+    <div class="actions" id="actions"></div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal hidden" id="modal">
+    <div class="modal-box" id="modal-box"></div>
+  </div>
+
+  <!-- A ordem importa: cada arquivo usa o que foi definido nos anteriores. -->
+  <script src="js/cards.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>

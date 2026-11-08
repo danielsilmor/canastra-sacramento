@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Testes da Canastra Sacramentana</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; margin: 24px; background: #f7f7f2; color: #222; }
+    li.pass::marker { content: "✅ "; }
+    li.fail::marker { content: "❌ "; }
+    li.fail { color: #b00020; font-weight: 600; }
+    #summary { font-size: 20px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Testes automáticos das regras</h1>
+  <p>Abra este arquivo no navegador. Cada linha confere uma regra. No fim, partidas inteiras são jogadas só por computadores para procurar erros.</p>
+  <div id="summary">Rodando…</div>
+  <ul id="results"></ul>
+
+  <script src="js/cards.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/ai.js"></script>
+  <script>
+    const results = [];
+    function check(name, condition, detail = '') {
+      results.push({ name, ok: !!condition, detail });
+    }
+    // Cria cartas rapidamente: C('7H') = 7 de copas, C('JK') = coringão, C('10S'), C('AD')...
+    let nextId = 1000;
+    function C(code) {
+      if (code === 'JK') return { id: nextId++, rank: JOKER_RANK, suit: 'X' };
+      const suit = code.slice(-1);
+      const r = code.slice(0, -1);
+      const rank = { J: 11, Q: 12, K: 13, A: 14 }[r] || Number(r);
+      return { id: nextId++, rank, suit };
+    }
+    const cards = (s) => s.split(' ').map(C);
+    const meld = (s) => Rules.analyzeMeld(cards(s));
+
+    // --- Baralho ---
+    const deck = createDeck();
+    check('Baralho tem 106 cartas', deck.length === 106);
+    check('Baralho tem 2 coringões', deck.filter(isJoker).length === 2);
+    check('Valores: 4=5, 8=10, A=15, 2=10, JK=20, 3 preto=5',
+      cardValue(C('4S')) === 5 && cardValue(C('8H')) === 10 && cardValue(C('AH')) === 15 &&
+      cardValue(C('2C')) === 10 && cardValue(C('JK')) === 20 && cardValue(C('3S')) === 5);
+
+    // --- Sequências ---
+    check('4 5 6 de copas é válida', meld('4H 5H 6H').ok);
+    check('Q K A de espadas é válida', meld('QS KS AS').ok);
+    check('Naipes misturados é inválida', !meld('4H 5S 6H').ok);
+    check('Carta repetida é inválida', !meld('4H 5H 5H 6H').ok);
+    check('Sequência com buraco é inválida', !meld('4H 5H 7H').ok);
+    check('Buraco tapado por curinga é válida e suja', meld('4H 2C 6H').ok && meld('4H 2C 6H').dirty);
+    check('Curinga na ponta é válida', meld('9D 10D JK').ok);
+    check('Sequência com coringão continua limpa', meld('9D 10D JK').ok && !meld('9D 10D JK').dirty);
+    check('Canastra com coringão é limpa', Rules.isCleanCanastra(cards('4H 5H 6H 7H JK 9H 10H')));
+    check('Canastra com coringuinha (2) é suja', !Rules.isCleanCanastra(cards('4H 5H 6H 7H 2S 9H 10H')));
+    check('Dois curingas é inválida', !meld('4H 5H JK 2S').ok);
+    check('3 preto não entra em sequência', !meld('3S 4S 5S').ok);
+    check('2 não é carta natural (A 2 3 inválida)', !meld('AH 2H 3H').ok);
+    check('K A não continua no 2/3 (K A + curinga vira Q)', meld('KH AH JK').ok &&
+      meld('KH AH JK').ordered[0].rank === JOKER_RANK);
+    check('Sequência de Ases de naipes diferentes', meld('AH AS AC').ok);
+    check('Sequência de Ases com Ases repetidos', meld('AH AH AS').ok);
+    check('Sequência de 2 cartas é inválida', !meld('4H 5H').ok);
+    check('Sequência completa 4..A (11 cartas)', meld('4C 5C 6C 7C 8C 9C 10C JC QC KC AC').ok);
+    check('Ordena as cartas na mesa', meld('6H 4H 5H').ordered.map((c) => c.rank).join() === '4,5,6');
+
+    // --- Separar a seleção em várias sequências ---
+    const split = (s) => Rules.splitIntoMelds(cards(s));
+    const show = (groups) => groups ? groups.map((gr) => gr.map(cardName).join(' ')).sort().join(' | ') : 'null';
+    check('Separa duas sequências, cada uma com seu coringuinha',
+      show(split('10S 8S 2S 8C 9C JC QC 2D')).split(' | ').length === 2 &&
+      split('10S 8S 2S 8C 9C JC QC 2D').every((gr) => gr.filter(isWild).length === 1),
+      show(split('10S 8S 2S 8C 9C JC QC 2D')));
+    check('Separa duas sequências limpas de naipes diferentes',
+      show(split('4H 5H 6H 8C 9C 10C')) === '4♥ 5♥ 6♥ | 8♣ 9♣ 10♣', show(split('4H 5H 6H 8C 9C 10C')));
+    check('Separa sequência normal e sequência de Ases',
+      split('AH AS AC 5D 6D 7D') !== null, show(split('AH AS AC 5D 6D 7D')));
+    check('Não separa cartas que não formam sequências', split('4H 6C 9S') === null);
+
+    // --- Várias formas de montar (o jogo pergunta qual o jogador quer) ---
+    const opts = (s) => Rules.meldOptions(cards(s));
+    check('Coringão e coringuinha em duas sequências: 2 opções', opts('KH AH QD KD JK 2H').length === 2,
+      opts('KH AH QD KD JK 2H').map(show).join(' || '));
+    check('Cada opção usa 1 curinga por sequência',
+      opts('KH AH QD KD JK 2H').every((o) => o.every((m) => m.filter(isWild).length === 1)));
+    check('Dois coringuinhas trocados de lugar contam como 1 opção só', opts('10S 8S 2S 8C 9C JC QC 2D').length === 1);
+    check('Coringão que cabe em qualquer das duas sequências: 2 opções', opts('4H 5H 6H 8C 9C 10C JK').length === 2);
+    check('Sequências sem curinga: 1 opção', opts('4H 5H 6H 8C 9C 10C').length === 1);
+    check('Uma sequência só: 1 opção', opts('7S 8S JK').length === 1);
+
+    // --- Pontuação ---
+    const t1 = { melds: [{ cards: cards('4H 5H 6H 7H 8H 9H 10H') }], redThrees: cards('3H 3D') };
+    const s1 = Rules.scoreTeam(t1, cards('KS'), true);
+    // cartas: 5*4 + 10*3 = 50; limpa 500; bate 100; 3 vermelhos 200; mão -10
+    check('Pontuação com canastra limpa, bate e 3 vermelhos', s1.total === 50 + 500 + 100 + 200 - 10, JSON.stringify(s1));
+    const t2 = { melds: [{ cards: cards('4H 5H 6H') }], redThrees: cards('3H 3D 3H 3D') };
+    const s2 = Rules.scoreTeam(t2, [], false);
+    check('Quatro 3 vermelhos sem canastra = -500', s2.redThrees === -500, JSON.stringify(s2));
+    const t3 = { melds: [{ cards: cards('4H 5H 6H 7H 8H 9H 2C') }], redThrees: cards('3H 3D 3H 3D') };
+    check('Canastra suja (com 2) vale 300 e quatro 3 vermelhos +500', (() => {
+      const s = Rules.scoreTeam(t3, [], false);
+      return s.canastras === 300 && s.redThrees === 500;
+    })());
+    const t4 = { melds: [{ cards: cards('4H 5H 6H 7H 8H 9H JK') }], redThrees: [] };
+    check('Canastra com coringão vale 500 (limpa)', Rules.scoreTeam(t4, [], false).canastras === 500);
+    check('VU acima de 2.500 exige 120 para abrir', Rules.openingMinimum(2501) === 120 && Rules.openingMinimum(2500) === 80);
+
+    // --- Jogadas na mesa (cenários montados à mão) ---
+    function setup(handCodes, opts = {}) {
+      const g = new Game({ allBots: true });
+      g.newMatch();
+      g.current = 0;
+      g.phase = opts.phase || 'play';
+      g.isFirstTurn = false;
+      g.turn = g.freshTurn();
+      g.players[0].hand = cards(handCodes);
+      if (opts.discard) g.discardPile = cards(opts.discard);
+      return g;
+    }
+    const ids = (g, ...idx) => idx.map((i) => g.players[0].hand[i].id);
+
+    let g = setup('4H 5H 6H KS KD');
+    check('Abertura abaixo de 80 é recusada', !g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2)] }).ok);
+
+    g = setup('JH QH KH AH 10S JS QS KS 9D 9C');
+    check('Abertura somando duas sequências (45 + 40 = 85) é aceita',
+      g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3), ids(g, 4, 5, 6, 7)] }).ok && g.teams[0].opened);
+
+    // Canastra abre o jogo mesmo somando menos que o mínimo (4♦ a 10♦ = 50 pontos).
+    g = setup('4D 5D 6D 7D 8D 9D 10D KS KC');
+    check('Canastra limpa abre o jogo com menos de 80 pontos',
+      g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3, 4, 5, 6)] }).ok && g.teams[0].opened);
+    g = setup('4D 5D 6D 2C 8D 9D 10D KS KC');
+    check('Canastra suja abre o jogo com menos de 80 pontos',
+      g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3, 4, 5, 6)] }).ok && g.teams[0].opened);
+    g = setup('4D 5D 6D 7D 8D 9D 10D KS KC');
+    g.teams[0].minOpen = 120; g.teams[0].vu = true;
+    check('Canastra abre o jogo também em VU (120)',
+      g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3, 4, 5, 6)] }).ok);
+    g = setup('4D 5D 6D 7D 8D 9D KS KC');
+    check('6 cartas (não é canastra) com 45 pontos não abre',
+      !g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3, 4, 5)] }).ok);
+
+    g = setup('JH QH KH AH 10S JS QS KS 9D');
+    check('Não pode ficar com 1 carta sem canastra limpa',
+      !g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3), ids(g, 4, 5, 6, 7)] }).ok);
+
+    g = setup('5H 6H KS 9D', { phase: 'draw', discard: '8C 4H' });
+    g.teams[0].opened = true;
+    check('Pega o lixo com o topo + 2 cartas da mão',
+      g.applyMelds(0, { pickup: true, newMelds: [['TOP', ...ids(g, 0, 1)]] }).ok &&
+      g.players[0].hand.some((c) => c.rank === 8 && c.suit === 'C') && g.discardPile.length === 0);
+
+    g = setup('KS 9D 9C', { phase: 'draw', discard: '8C 7H' });
+    g.teams[0].opened = true;
+    g.teams[0].melds = [{ cards: cards('4H 5H 6H') }];
+    check('Não pega o lixo só encaixando o topo num jogo já baixado (precisa de 2 cartas da mão)',
+      !g.applyMelds(0, { pickup: true, additions: [{ meldIndex: 0, ids: ['TOP'] }] }).ok &&
+      g.teams[0].melds[0].cards.length === 3 && g.discardPile.length === 2);
+
+    g = setup('8S 9S KD 9D', { phase: 'draw', discard: '8C 7S' });
+    g.teams[0].opened = true;
+    g.teams[0].melds = [{ cards: cards('4S 5S 6S') }];
+    check('Pega o lixo com topo + 2 cartas da mão encaixando num jogo já baixado',
+      g.applyMelds(0, { pickup: true, additions: [{ meldIndex: 0, ids: ['TOP', ...ids(g, 0, 1)] }] }).ok &&
+      g.teams[0].melds[0].cards.length === 6 && g.discardPile.length === 0);
+
+    g = setup('9S 10S KD 9D', { phase: 'draw', discard: '8C 4S' });
+    g.teams[0].opened = true;
+    g.teams[0].melds = [{ cards: cards('5S 6S 7S 8S') }];
+    check('Topo + 2 cartas que não formam sequência entre si não pegam o lixo',
+      !g.applyMelds(0, { pickup: true, additions: [{ meldIndex: 0, ids: ['TOP', ...ids(g, 0, 1)] }] }).ok);
+
+    g = setup('5H 6H KS 9D', { phase: 'draw', discard: '8C 4H' });
+    g.teams[0].opened = true;
+    g.teams[0].melds = [{ cards: cards('7H 8H 9H') }];
+    check('Pegar o lixo com só 1 carta da mão é recusado',
+      !g.applyMelds(0, { pickup: true, newMelds: [['TOP', ...ids(g, 0)]] }).ok);
+
+    g = setup('8S 2S 8C 9C JC QC 2D 5H', { phase: 'draw', discard: '4D 10S' });
+    const H = g.players[0].hand;
+    check('Pega o lixo baixando duas sequências de uma vez, cada uma com seu coringuinha (abertura)',
+      g.applyMelds(0, { pickup: true, newMelds: [
+        ['TOP', H[0].id, H[1].id],
+        [H[2].id, H[3].id, H[6].id, H[4].id, H[5].id],
+      ] }).ok && g.teams[0].melds.length === 2);
+
+    g = setup('5H 6H KS 9D', { phase: 'draw', discard: '4H 3S' });
+    check('Lixo travado por 3 preto', g.isDiscardBlocked() &&
+      !g.applyMelds(0, { pickup: true, newMelds: [['TOP', ...ids(g, 0, 1)]] }).ok);
+
+    g = setup('5H 6H KS 9D', { phase: 'draw', discard: '4H 2S' });
+    check('Lixo travado por coringuinha (2)', g.isDiscardBlocked() &&
+      !g.applyMelds(0, { pickup: true, newMelds: [['TOP', ...ids(g, 0, 1)]] }).ok);
+
+    g = setup('5H 6H KS 9D', { phase: 'draw', discard: '4H JK' });
+    check('Lixo travado por coringão', g.isDiscardBlocked() &&
+      !g.applyMelds(0, { pickup: true, newMelds: [['TOP', ...ids(g, 0, 1)]] }).ok);
+
+    g = setup('5H 6H KS 9D', { phase: 'draw', discard: '2S 4H' });
+    g.teams[0].opened = true;
+    check('Curinga embaixo no lixo não trava (só o topo importa)', !g.isDiscardBlocked() &&
+      g.applyMelds(0, { pickup: true, newMelds: [['TOP', ...ids(g, 0, 1)]] }).ok);
+
+    g = setup('9D');
+    check('Não pode bater sem canastra limpa', !g.discard(0, ids(g, 0)[0]).ok);
+
+    g = setup('9D');
+    g.teams[0].melds = [{ cards: cards('4H 5H 6H 7H 8H 9H 10H') }];
+    g.teams[0].opened = true;
+    check('Bate descartando a última carta com canastra limpa',
+      g.discard(0, ids(g, 0)[0]).ok && g.phase === 'roundEnd' && g.lastRound.batedor === 0);
+
+    // Segunda compra do primeiro jogador
+    g = new Game({ allBots: true });
+    g.newMatch();
+    let tries = 0;
+    let secondOk = false;
+    while (tries++ < 50) {
+      g.startRound();
+      const seat = g.current;
+      g.drawFromStock(seat);
+      if (g.turn.canSecondDraw) {
+        const firstId = g.turn.firstCardId;
+        secondOk = g.secondDraw(seat).ok && g.discardPile.length === 1 && g.discardPile[0].id === firstId;
+        break;
+      }
+    }
+    check('2ª compra: a 1ª carta vai para o lixo', secondOk);
+
+    // Primeira compra foi um 2 (coringuinha): não pode trocar, igual ao 3.
+    g = new Game({ allBots: true });
+    g.newMatch();
+    {
+      const seat = g.current;
+      const idx = g.stock.findIndex((c) => c.rank === 2);
+      g.stock.push(g.stock.splice(idx, 1)[0]); // o 2 fica no topo do monte
+      g.drawFromStock(seat);
+      check('1ª compra com um 2: não pode trocar de carta', !g.turn.canSecondDraw && !g.secondDraw(seat).ok);
+    }
+    // Primeira compra foi um coringão: também não pode trocar.
+    {
+      let ok = false;
+      for (let tries = 0; tries < 50 && !ok; tries++) {
+        g = new Game({ allBots: true });
+        g.newMatch();
+        const idx = g.stock.findIndex(isJoker);
+        if (idx < 0) continue; // os 2 coringões saíram na distribuição: tenta outra
+        const seat = g.current;
+        g.stock.push(g.stock.splice(idx, 1)[0]); // o coringão fica no topo do monte
+        g.drawFromStock(seat);
+        ok = !g.turn.canSecondDraw && !g.secondDraw(seat).ok;
+      }
+      check('1ª compra com um coringão: não pode trocar de carta', ok);
+    }
+
+    // Distribuição
+    g = new Game({ allBots: true });
+    g.newMatch();
+    check('Cada jogador fica com 15 cartas após a distribuição', g.players.every((p) => p.hand.length === 15));
+    check('Nenhum 3 vermelho fica na mão', g.players.every((p) => !p.hand.some(isRedThree)));
+    check('106 cartas no total após a distribuição', g.countCards() === 106);
+
+    // --- Partidas simuladas só com computadores ---
+    // "levels" = nível de cada lugar (0 a 3). "maxRounds" = limite de rodadas por partida.
+    async function simulate(matches, levels = ['moderado', 'moderado', 'moderado', 'moderado'], maxRounds = 100) {
+      let rounds = 0;
+      let errors = [];
+      let bates = 0;
+      for (let m = 0; m < matches; m++) {
+        const sim = new Game({ allBots: true });
+        sim.newMatch();
+        const pause = async () => {
+          if (sim.countCards() !== 106) throw new Error('cartas somaram ' + sim.countCards());
+        };
+        let guard = 0;
+        try {
+          while (!sim.matchOver && guard < maxRounds) {
+            let steps = 0;
+            while ((sim.phase === 'draw' || sim.phase === 'play') && steps++ < 3000) {
+              const before = `${sim.current}|${sim.phase}|${sim.log.length}`;
+              await AI.takeTurn(sim, sim.current, pause, levels[sim.current]);
+              if (before === `${sim.current}|${sim.phase}|${sim.log.length}`) {
+                const p = sim.players[sim.current];
+                throw new Error(`computador travou (fase ${sim.phase}, monte ${sim.stock.length}, ` +
+                  `mão ${p.hand.map(cardName).join(' ')}, último log: ${sim.log[sim.log.length - 1].text})`);
+              }
+            }
+            if (sim.phase !== 'roundEnd') throw new Error('rodada não terminou');
+            if (sim.lastRound.batedor !== null) bates++;
+            rounds++;
+            guard++;
+            if (!sim.matchOver) sim.nextRound();
+          }
+          if (!sim.matchOver && maxRounds >= 100) errors.push('partida não terminou em 100 rodadas');
+        } catch (e) {
+          errors.push(e.message);
+        }
+      }
+      return { rounds, errors, bates };
+    }
+
+    (async () => {
+      let r = await simulate(20);
+      check(`20 partidas simuladas com bots Moderados sem erros (${r.rounds} rodadas, ${r.bates} terminaram com bate)`,
+        r.errors.length === 0, r.errors.slice(0, 3).join(' | '));
+      r = await simulate(5, ['iniciante', 'iniciante', 'iniciante', 'iniciante']);
+      check(`5 partidas com bots Iniciantes sem erros (${r.rounds} rodadas)`,
+        r.errors.length === 0, r.errors.slice(0, 3).join(' | '));
+      // Estratégico e Mestre "imaginam" jogadas: aqui com poucas simulações, só para conferir que funcionam.
+      const sim = { ...AI.SIM };
+      AI.SIM.maxRounds = 2;
+      AI.SIM.horizon = 4;
+      r = await simulate(1, ['mestre', 'estrategico', 'moderado', 'iniciante'], 3);
+      check(`3 rodadas com os 4 níveis juntos sem erros (${r.rounds} rodadas)`,
+        r.errors.length === 0 && r.rounds >= 1, r.errors.slice(0, 3).join(' | '));
+      Object.assign(AI.SIM, sim);
+    })().catch((e) => check('Simulações rodaram até o fim', false, e.message)).finally(finish);
+
+    function finish() {
+      const list = document.getElementById('results');
+      for (const r of results) {
+        const li = document.createElement('li');
+        li.className = r.ok ? 'pass' : 'fail';
+        li.textContent = r.name + (r.ok || !r.detail ? '' : '. Detalhe: ' + r.detail);
+        list.appendChild(li);
+      }
+      const failed = results.filter((r) => !r.ok).length;
+      document.getElementById('summary').textContent = failed
+        ? `${failed} de ${results.length} testes falharam`
+        : `Todos os ${results.length} testes passaram`;
+      document.title = failed ? 'FAIL' : 'PASS';
+    }
+  </script>
+</body>
+</html>

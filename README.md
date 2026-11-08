@@ -1,14 +1,14 @@
-# Canastra Sacramentana: versão de teste (MVP)
+# Canastra Sacramento: versão de teste (MVP)
 
 Jogo de Canastra no navegador, seguindo o regulamento da modalidade personalizada.
 Você joga em dupla com a Beatriz (computador) contra João e Rafael, também do computador.
 
 ## Jogar online
 
-O jogo está publicado em **https://danielsilmor.github.io/canastra-sacramentana/**
+O jogo está publicado em **https://danielsilmor.github.io/canastra-sacramento/**
 (abre no computador e no celular, sem instalar nada). Cada pessoa joga sozinha contra os bots, no próprio navegador.
 
-O código fica em https://github.com/danielsilmor/canastra-sacramentana (público).
+O código fica em https://github.com/danielsilmor/canastra-sacramento (público).
 A pasta `_material` (imagens de referência e anotações) **não** vai para a internet: ela está listada no arquivo `.gitignore`.
 
 ### Como publicar uma mudança
@@ -33,7 +33,7 @@ Opcional, para quem quiser mexer no código:
 
 ## Como jogar
 
-1. Abra a pasta `Canastra Sacramentana`.
+1. Abra a pasta `Canastra Sacramento`.
 2. Dê dois cliques em **`index.html`**. O jogo abre no navegador e a primeira rodada começa sozinha.
 
 Na sua vez:

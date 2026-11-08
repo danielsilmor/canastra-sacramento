@@ -1,5 +1,5 @@
 /*
- * rules.js: As regras da Canastra Sacramentana
+ * rules.js: As regras da Canastra Sacramento
  *
  * Funções "puras": recebem cartas e respondem se a jogada é válida
  * ou quanto ela vale. Não mexem na mesa: quem faz isso é o game.js.

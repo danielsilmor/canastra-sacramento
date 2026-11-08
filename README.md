@@ -3,6 +3,26 @@
 Jogo de Canastra no navegador, seguindo o regulamento da modalidade personalizada.
 Você joga em dupla com a Beatriz (computador) contra João e Rafael, também do computador.
 
+## Jogar online
+
+O jogo está publicado em **https://danielsilmor.github.io/canastra-sacramentana/**
+(abre no computador e no celular, sem instalar nada). Cada pessoa joga sozinha contra os bots, no próprio navegador.
+
+O código fica em https://github.com/danielsilmor/canastra-sacramentana (público).
+A pasta `_material` (imagens de referência e anotações) **não** vai para a internet: ela está listada no arquivo `.gitignore`.
+
+### Como publicar uma mudança
+
+Depois de alterar os arquivos, rode no terminal, dentro da pasta do jogo:
+
+```
+git add -A
+git commit -m "Descreva aqui o que mudou"
+git push
+```
+
+Em cerca de 1 minuto o site se atualiza sozinho.
+
 ## Do que você precisa
 
 **Só de um navegador** (Google Chrome ou Microsoft Edge). Não é preciso instalar nada.

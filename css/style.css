@@ -101,8 +101,8 @@ select {
   gap: 40px;
   padding: 16px var(--pad) 12px;
 }
-.brand-title { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
-.brand-sub { font-size: 13px; color: var(--muted); margin-top: 1px; }
+.brand { display: flex; align-items: center; }
+.brand-logo { height: 38px; width: auto; display: block; }
 .scoreboard { display: flex; gap: 36px; margin: 0 auto; }
 .score { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .score .label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }

@@ -38,7 +38,7 @@ Opcional, para quem quiser mexer no código:
 
 Na sua vez:
 1. **Comprar:** clique no **monte** (ou arraste o monte para a sua mão, ou use o botão "Comprar do monte").
-   Para **pegar o lixo**: selecione 2 ou mais cartas da mão que formem sequência com a carta do topo e clique no lixo (ou no botão "Pegar lixo"). Se essas cartas encaixarem num jogo que a dupla já tem, elas vão para esse jogo; para escolher o jogo, clique nele (ou arraste o lixo até ele). Também dá para arrastar o lixo para a mão depois de selecionar as cartas.
+   Para **pegar o lixo**: selecione 2 ou mais cartas da mão que formem sequência com a carta do topo e clique no lixo (ou no botão "Pegar lixo"). Se essas cartas também encaixarem num jogo que a dupla já tem, o jogo pergunta **onde descer**: juntar a esse jogo ou descer como jogo novo (cada opção aparece desenhada). Para ir direto a um jogo da mesa, sem pergunta, clique nele (ou arraste o lixo até ele). Também dá para arrastar o lixo para a mão depois de selecionar as cartas.
 2. **Baixar (opcional):** clique nas cartas para selecioná-las (elas sobem e ganham borda vermelha) e depois:
    - clique no painel **"Nós"** (ou arraste as cartas até ele) para baixar uma sequência nova;
    - clique num **jogo já baixado** (ou arraste as cartas até ele) para acrescentar.

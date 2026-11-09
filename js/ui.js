@@ -554,15 +554,71 @@ const UI = {
       return this.tryCommitStaging();
     }
     const melds = this.myTeam.melds;
-    const fits = (i) => Rules.analyzeMeld(melds[i].cards.concat(group)).ok;
-    // Sem jogo escolhido: encaixa num jogo da dupla se couber; senão vira um jogo novo.
-    const target = meldIndex !== null ? meldIndex : melds.findIndex((m, i) => fits(i));
-    const plan = { pickup: true, newMelds: others.map(toIds) };
-    if (target >= 0) plan.additions = [{ meldIndex: target, ids: toIds(group) }];
-    else plan.newMelds.unshift(toIds(group));
-    const extra = others.length ? ` e baixou mais ${others.length} sequência${others.length > 1 ? 's' : ''}` : '';
-    this.perform(() => g.applyMelds(0, plan),
-      `Você pegou o lixo${extra}! As cartas novas estão marcadas. Agora baixe o que quiser e descarte.`);
+    const go = (target) => {
+      const plan = { pickup: true, newMelds: others.map(toIds) };
+      if (target >= 0) plan.additions = [{ meldIndex: target, ids: toIds(group) }];
+      else plan.newMelds.unshift(toIds(group));
+      const extra = others.length ? ` e baixou mais ${others.length} sequência${others.length > 1 ? 's' : ''}` : '';
+      this.perform(() => g.applyMelds(0, plan),
+        `Você pegou o lixo${extra}! As cartas novas estão marcadas. Agora baixe o que quiser e descarte.`);
+    };
+    // Jogo escolhido (clicou num jogo ou arrastou o lixo até ele): vai direto.
+    if (meldIndex !== null) return go(meldIndex);
+    // Sem jogo escolhido: se as cartas também encaixam em jogos da dupla, pergunta onde descer.
+    const fitting = melds.map((m, i) => i).filter((i) => Rules.analyzeMeld(melds[i].cards.concat(group)).ok);
+    if (!fitting.length) return go(-1);
+    this.askPickupTarget(group, fitting, go);
+  },
+
+  // Pergunta onde descer as cartas do lixo: juntar a um jogo da dupla ou descer como jogo novo.
+  askPickupTarget(group, fitting, go) {
+    const melds = this.myTeam.melds;
+    const top = this.game.topDiscard;
+    this.showModal(`
+      <h2>Onde descer estas cartas?</h2>
+      <p>${cardTagsHtml(group.map(cardName).join(' '))} podem entrar num jogo que a dupla já tem ou virar um jogo novo. As cartas que estão descendo têm contorno amarelo.</p>
+      <div class="arrangements" id="pickup-targets"></div>
+      <div class="modal-actions"><button class="btn-light" id="btn-pt-cancel">Cancelar</button></div>`, true);
+    const list = $('pickup-targets');
+    const option = (label, cards, target) => {
+      const opt = document.createElement('div');
+      opt.className = 'arrangement';
+      opt.tabIndex = 0;
+      opt.setAttribute('role', 'button');
+      opt.innerHTML = `<span class="arr-label">${label}</span>`;
+      const box = document.createElement('div');
+      box.className = 'meld';
+      const row = document.createElement('div');
+      row.className = 'cards-row';
+      const a = Rules.analyzeMeld(cards);
+      (a.ok ? a.ordered : cards).forEach((c) => {
+        const el = this.cardEl(c, { small: true });
+        el.removeAttribute('data-id'); // não confunde as animações da mesa
+        el.classList.remove('fresh');
+        if (group.includes(c)) el.classList.add('pick-wild'); // destaca as cartas que estão descendo
+        row.appendChild(el);
+      });
+      box.appendChild(row);
+      const info = Rules.isCanastra(cards)
+        ? `canastra ${Rules.isDirty(cards) ? 'suja' : 'limpa'} · ${cards.length} cartas` : `${cards.length} cartas`;
+      box.insertAdjacentHTML('beforeend', `<div class="meld-info">${info}${group.includes(top) ? ' · com o lixo' : ''}</div>`);
+      opt.appendChild(box);
+      const pick = () => {
+        this.hideModal();
+        go(target);
+      };
+      opt.onclick = pick;
+      opt.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          pick();
+        }
+      };
+      list.appendChild(opt);
+    };
+    fitting.forEach((i) => option('Juntar ao jogo da mesa', melds[i].cards.concat(group), i));
+    option('Descer como jogo novo', group, -1);
+    $('btn-pt-cancel').onclick = () => this.hideModal();
   },
 
   onMeld() {

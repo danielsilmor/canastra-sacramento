@@ -24,6 +24,29 @@ const PACE = {
   fast: { anim: 0.5, wait: 250 },
 };
 const CARD_W = 70; // largura da carta grande (igual ao --card-w do CSS)
+// Tamanhos de carta da engrenagem: [chave, nome, largura da carta em px].
+// Cada tamanho é o mesmo em todas as áreas ("Muito pequeno" é igual na mesa, na mão e no monte).
+const CARD_SIZES = [
+  ['xs', 'Muito pequeno', 38],
+  ['s', 'Pequeno', 46],
+  ['m', 'Médio', 58],
+  ['l', 'Grande', 70],
+  ['xl', 'Muito grande', 84],
+];
+// Áreas com tamanho próprio:
+// [chave, nome, explicação, variável do CSS, largura da carta no desenho original, tamanho padrão]
+const CARD_AREAS = [
+  ['table', 'Jogos na mesa', 'sequências baixadas e área de abertura', '--zoom-table', 46, 's'],
+  ['hand', 'Sua mão', 'as cartas que você segura', '--zoom-hand', 70, 'l'],
+  ['piles', 'Monte e lixo', 'pilhas de compra e descarte', '--zoom-piles', 70, 'l'],
+];
+// Configurações padrão (usadas na primeira vez e no botão "Restaurar padrão").
+const DEFAULT_SETTINGS = () => ({
+  pace: 'step',
+  levels: { 1: 'moderado', 2: 'moderado', 3: 'moderado' },
+  cardSizes: Object.fromEntries(CARD_AREAS.map((a) => [a[0], a[5]])),
+});
+const SETTINGS_COOKIE = 'canastra-settings';
 
 // Transforma um texto em HTML, trocando cada carta citada (ex.: "Q♠", "10♥", "Coringão")
 // por uma fichinha branca com a cor da carta.
@@ -60,6 +83,7 @@ const UI = {
   token: 0,              // muda a cada nova partida (interrompe jogadas antigas)
   pace: 'step',
   levels: { 1: 'moderado', 2: 'moderado', 3: 'moderado' }, // inteligência de cada bot (lugar 1, 2 e 3)
+  cardSizes: DEFAULT_SETTINGS().cardSizes,                 // tamanho das cartas de cada área
   msg: { text: '', type: 'info' },
   view: null,            // durante a distribuição: o que já foi mostrado na mesa
   eventCursor: 0,        // quantos eventos do jogo já foram animados
@@ -219,7 +243,8 @@ const UI = {
   // Faz uma cópia da carta voar de "from" até "to".
   fly(card, from, to, duration) {
     const norm = (r) =>
-      r.width > 80 ? { left: r.left + r.width / 2 - 24, top: r.top + r.height / 2 - 34, width: 48 } : r;
+      // Mais largo que uma carta (mesmo no tamanho "Muito grande") = é um quadro, não uma carta.
+      r.width > 100 ? { left: r.left + r.width / 2 - 24, top: r.top + r.height / 2 - 34, width: 48 } : r;
     const a = norm(from);
     const b = norm(to);
     return new Promise((resolve) => {
@@ -1335,20 +1360,66 @@ const UI = {
 
   // ---------- Configurações (engrenagem) ----------
 
-  // Lê o ritmo e a inteligência dos bots guardados no navegador.
-  loadSettings() {
+  /*
+   * As configurações ficam num cookie do navegador (vale por cerca de 1 ano).
+   * Abrindo o index.html direto do computador, alguns navegadores não aceitam cookie;
+   * nesse caso elas ficam no armazenamento local do navegador.
+   */
+  cookiePath() {
+    return location.pathname.replace(/[^/]*$/, '') || '/';
+  },
+  readStoredSettings() {
     try {
-      const s = JSON.parse(localStorage.getItem('canastra-settings') || '{}');
-      if (PACE[s.pace]) this.pace = s.pace;
-      for (const seat of [1, 2, 3]) {
-        if (s.levels && AI.LEVELS[s.levels[seat]]) this.levels[seat] = s.levels[seat];
-      }
-    } catch (e) { /* sem armazenamento: fica o padrão */ }
+      const m = document.cookie.match(new RegExp(`(?:^|;\\s*)${SETTINGS_COOKIE}=([^;]*)`));
+      if (m) return JSON.parse(decodeURIComponent(m[1]));
+      return JSON.parse(localStorage.getItem(SETTINGS_COOKIE) || 'null');
+    } catch (e) {
+      return null;
+    }
+  },
+  writeStoredSettings(data) {
+    const value = encodeURIComponent(JSON.stringify(data));
+    document.cookie = `${SETTINGS_COOKIE}=${value}; max-age=${60 * 60 * 24 * 365}; path=${this.cookiePath()}; SameSite=Lax`;
+    const cookieOk = document.cookie.includes(`${SETTINGS_COOKIE}=`);
+    try {
+      if (cookieOk) localStorage.removeItem(SETTINGS_COOKIE);
+      else localStorage.setItem(SETTINGS_COOKIE, JSON.stringify(data));
+    } catch (e) { /* sem armazenamento */ }
+  },
+  clearStoredSettings() {
+    document.cookie = `${SETTINGS_COOKIE}=; max-age=0; path=${this.cookiePath()}; SameSite=Lax`;
+    try { localStorage.removeItem(SETTINGS_COOKIE); } catch (e) { /* sem armazenamento */ }
+  },
+
+  // Lê o ritmo, a inteligência dos bots e o tamanho das cartas guardados no navegador.
+  loadSettings() {
+    const d = DEFAULT_SETTINGS();
+    const s = this.readStoredSettings() || {};
+    this.pace = PACE[s.pace] ? s.pace : d.pace;
+    for (const seat of [1, 2, 3]) {
+      this.levels[seat] = s.levels && AI.LEVELS[s.levels[seat]] ? s.levels[seat] : d.levels[seat];
+    }
+    for (const [area] of CARD_AREAS) {
+      const ok = s.cardSizes && CARD_SIZES.some(([k]) => k === s.cardSizes[area]);
+      this.cardSizes[area] = ok ? s.cardSizes[area] : d.cardSizes[area];
+    }
+    this.applyCardSizes();
   },
   saveSettings() {
-    try {
-      localStorage.setItem('canastra-settings', JSON.stringify({ pace: this.pace, levels: this.levels }));
-    } catch (e) { /* sem armazenamento */ }
+    this.writeStoredSettings({ pace: this.pace, levels: this.levels, cardSizes: this.cardSizes });
+  },
+  // Volta tudo ao padrão e apaga o que estava guardado.
+  resetSettings() {
+    this.clearStoredSettings();
+    this.loadSettings();
+    this.render();
+  },
+  // Aplica o tamanho escolhido para as cartas de cada área (variáveis do CSS).
+  applyCardSizes() {
+    for (const [area, , , cssVar, baseWidth, def] of CARD_AREAS) {
+      const size = CARD_SIZES.find(([k]) => k === this.cardSizes[area]) || CARD_SIZES.find(([k]) => k === def);
+      document.documentElement.style.setProperty(cssVar, (size[2] / baseWidth).toFixed(4));
+    }
   },
 
   showSettings() {
@@ -1382,12 +1453,23 @@ const UI = {
       </div>
       <h3>Inteligência dos bots</h3>
       ${bots}
-      <p class="set-note">A mudança vale a partir da próxima jogada de cada bot e fica guardada neste navegador.</p>
+      <p class="set-note">A mudança vale a partir da próxima jogada de cada bot.</p>
       <details class="hands-box set-help">
         <summary>O que cada nível faz</summary>
         <ul>${Object.entries(AI.LEVELS).map(([k, v]) => `<li><b>${v.label}:</b> ${levelHelp[k]}</li>`).join('')}</ul>
       </details>
-      <div class="modal-actions"><button class="btn-primary" id="btn-settings-close">Pronto</button></div>`, true);
+      <h3>Tamanho das cartas</h3>
+      ${CARD_AREAS.map(([area, label, help, , , def]) => `
+      <div class="set-row">
+        <div class="set-who"><b>${label}</b><span>${help}</span></div>
+        <select data-area="${area}">${options(
+          CARD_SIZES.map(([k, name]) => [k, k === def ? `${name} (padrão)` : name]), this.cardSizes[area])}</select>
+      </div>`).join('')}
+      <p class="set-note">Cada tamanho é igual em todas as áreas. As configurações ficam guardadas num cookie deste navegador.</p>
+      <div class="modal-actions">
+        <button class="btn-light" id="btn-settings-reset" title="Volta o ritmo, a inteligência dos bots e o tamanho das cartas ao padrão">Restaurar padrão</button>
+        <button class="btn-primary" id="btn-settings-close">Pronto</button>
+      </div>`, true);
 
     $('set-pace').onchange = (e) => {
       this.pace = e.target.value;
@@ -1402,6 +1484,18 @@ const UI = {
         this.render(); // o nível aparece no quadro de cada jogador
       };
     });
+    $('modal-box').querySelectorAll('select[data-area]').forEach((sel) => {
+      sel.onchange = () => {
+        this.cardSizes[sel.dataset.area] = sel.value;
+        this.applyCardSizes(); // muda na hora, dá para ver atrás da janela
+        this.saveSettings();
+      };
+    });
+    $('btn-settings-reset').onclick = () => {
+      this.resetSettings();
+      this.showSettings(); // redesenha a janela com os valores padrão
+      this.toast('Configurações restauradas para o padrão.');
+    };
     $('btn-settings-close').onclick = () => this.hideModal();
   },
 

@@ -207,6 +207,12 @@ button.btn-gear:hover svg { transform: rotate(60deg); }
 .panel-header .chip { margin-left: auto; }
 
 .melds { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-start; }
+
+/* Tamanho das cartas de cada área (escolhido na engrenagem). 1 = tamanho normal. */
+:root { --zoom-table: 1; --zoom-hand: 1; --zoom-piles: 1; }
+.team-area .melds, .staging .meld { zoom: var(--zoom-table); }
+.hand { zoom: var(--zoom-hand); }
+.piles { zoom: var(--zoom-piles); }
 .meld {
   display: flex;
   flex-direction: column;

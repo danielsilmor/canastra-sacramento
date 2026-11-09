@@ -286,6 +286,23 @@ button.btn-gear:hover svg { transform: rotate(60deg); }
 /* No quadro do jogador, a base da foto fica alinhada com a base das cartas */
 .player .avatar { height: 66px; }
 .modal-box .set-row .set-who { flex: 1; }
+.modal-box .set-check { cursor: pointer; }
+.modal-box .set-check input { width: 20px; height: 20px; accent-color: var(--green); cursor: pointer; flex: none; }
+
+/* ---------- Modo depuração ---------- */
+/* Cartas do bot viradas para cima, no quadro do jogador */
+.player .bot-hand { font-size: 11px; line-height: 1.9; max-width: 100%; }
+.player .bot-hand .cardtag { margin: 0 2px 0 0; }
+/* "Por quê?": motivos de cada decisão do bot */
+details.why { margin-top: 4px; font-size: 12.5px; color: var(--text-2); }
+details.why summary { cursor: pointer; color: var(--yellow); font-weight: 600; font-size: 13px; list-style: none; }
+details.why summary::-webkit-details-marker { display: none; }
+details.why summary::before { content: "▸ "; }
+details.why[open] summary::before { content: "▾ "; }
+details.why ul { margin: 6px 0 0; padding-left: 16px; line-height: 1.5; }
+details.why li { margin-bottom: 5px; }
+.narration details.why ul { max-height: 260px; overflow: auto; }
+.log li.debug { list-style: none; }
 .narration .who.mine { color: var(--green); }
 .narration .what { font-size: 14px; color: var(--text-2); line-height: 1.5; white-space: pre-line; margin-top: 4px; max-height: 260px; overflow: auto; }
 .narration button { margin-top: 8px; width: 100%; }

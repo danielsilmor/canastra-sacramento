@@ -39,12 +39,33 @@ const AI = {
     return AI.LEVELS[level] ? level : AI.DEFAULT_LEVEL;
   },
 
+  // ---------- Explicações (modo depuração) ----------
+  // Com o modo depuração ligado, o bot anota o motivo de cada decisão da vez.
+  // Nas simulações (jogadas "imaginadas") nada é anotado.
+  trace: null,      // anotações da vez atual (null = não anotar)
+  lastTrace: [],    // anotações da última vez jogada
+  quiet: 0,         // maior que 0 enquanto o bot está simulando
+
+  note(text) {
+    if (AI.trace && !AI.quiet && !AI.trace.includes(text)) AI.trace.push(text);
+  },
+  names(cards) {
+    return cards.map(cardName).join(' ');
+  },
+
   // ---------- A vez do bot ----------
 
   // Executa a vez inteira. "pause" dá tempo de mostrar cada passo na tela.
-  async takeTurn(game, seat, pause, level) {
-    // eslint-disable-next-line no-unused-vars
-    for (const step of AI.turnSteps(game, seat, AI.levelOf(level))) await pause();
+  // "explain" = anotar os motivos de cada decisão (modo depuração).
+  async takeTurn(game, seat, pause, level, explain = false) {
+    AI.trace = explain ? [] : null;
+    try {
+      // eslint-disable-next-line no-unused-vars
+      for (const step of AI.turnSteps(game, seat, AI.levelOf(level))) await pause();
+    } finally {
+      AI.lastTrace = AI.trace || [];
+      AI.trace = null;
+    }
   },
 
   // A mesma vez, sem pausas (usada nas simulações).
@@ -66,6 +87,8 @@ const AI = {
         }
         game.drawFromStock(seat);
         if (game.turn.canSecondDraw && AI.wantsSecondDraw(game, seat)) {
+          const first = game.players[seat].hand.find((c) => c.id === game.turn.firstCardId);
+          AI.note(`Trocou ${cardName(first)} (primeiro a jogar): a carta comprada não combinava com nada da mão.`);
           yield;
           game.secondDraw(seat);
         }
@@ -94,37 +117,138 @@ const AI = {
   // Comprar: retorna o plano para pegar o lixo, ou null para comprar do monte.
   decideDraw(game, seat, level) {
     const plan = AI.findPickup(game, seat);
-    if (!plan || !game.stock.length) return plan; // sem monte, só resta o lixo
-    if (level === 'iniciante') return Math.random() < 0.35 ? null : plan; // às vezes nem vê o lixo
+    if (!plan) {
+      AI.note(AI.whyNoPickup(game, seat));
+      return null;
+    }
+    const pickupText = AI.describePickup(game, seat, plan);
+    if (!game.stock.length) {
+      AI.note(`O monte acabou, então pegou o lixo. ${pickupText}`);
+      return plan; // sem monte, só resta o lixo
+    }
+    if (level === 'iniciante') {
+      if (Math.random() < 0.35) {
+        AI.note(`Podia pegar o lixo, mas comprou do monte (erro de propósito do nível Iniciante). ${pickupText}`);
+        return null;
+      }
+      AI.note(pickupText);
+      return plan;
+    }
     if (!AI.LEVELS[level].sim) {
       // Moderado: se dá para fechar uma canastra com curinga, compra do monte em vez de pegar o lixo.
-      return AI.wildClosesCanastra(game, seat) ? null : plan;
+      if (AI.wildClosesCanastra(game, seat)) {
+        AI.note('Podia pegar o lixo, mas preferiu comprar do monte: dá para fechar uma canastra com o curinga da mão.');
+        return null;
+      }
+      AI.note(pickupText);
+      return plan;
     }
     // Estratégico e Mestre: imaginam as duas opções e ficam com a que rende mais.
-    const best = AI.simulateBest(game, seat, level, [{ kind: 'stock' }, { kind: 'pickup', plan }]);
+    const cands = [{ kind: 'stock', label: 'comprar do monte' }, { kind: 'pickup', plan, label: 'pegar o lixo' }];
+    const best = AI.simulateBest(game, seat, level, cands);
+    AI.note(`${AI.simSummary(cands)} Escolheu ${best.label}.` + (best.kind === 'pickup' ? ` ${pickupText}` : ''));
     return best.kind === 'pickup' ? plan : null;
+  },
+
+  // Por que não deu para pegar o lixo?
+  whyNoPickup(game, seat) {
+    const top = game.topDiscard;
+    const team = game.teamOf(seat);
+    if (!top) return 'Comprou do monte: o lixo está vazio.';
+    if (game.isDiscardBlocked()) return `Comprou do monte: o lixo está travado (${cardName(top)} no topo).`;
+    if (isThree(top)) return `Comprou do monte: o topo do lixo é ${cardName(top)}, e 3 não entra em sequência.`;
+    const hand = game.players[seat].hand.filter((c) => !isThree(c));
+    let pair = false;
+    for (let i = 0; i < hand.length && !pair; i++) {
+      for (let j = i + 1; j < hand.length && !pair; j++) pair = Rules.analyzeMeld([top, hand[i], hand[j]]).ok;
+    }
+    if (!pair) return `Comprou do monte: não tem 2 cartas na mão que formem sequência com ${cardName(top)} do lixo.`;
+    return `Comprou do monte: dava para usar ${cardName(top)} do lixo, mas não alcança o mínimo para abrir ` +
+      `(${team.minOpen} pontos ou uma canastra).`;
+  },
+
+  // Descreve o plano de pegar o lixo.
+  describePickup(game, seat, plan) {
+    const hand = game.players[seat].hand;
+    const top = game.topDiscard;
+    const team = game.teamOf(seat);
+    const fromHand = (ids) => ids.filter((id) => id !== 'TOP').map((id) => hand.find((c) => c.id === id));
+    const size = game.discardPile.length;
+    if (plan.additions && plan.additions.length) {
+      const a = plan.additions[0];
+      return `Pegou o lixo (${size} carta${size > 1 ? 's' : ''}): ${cardName(top)} do topo + ${AI.names(fromHand(a.ids))} da mão, ` +
+        `encaixando no jogo ${AI.names(team.melds[a.meldIndex].cards)}.`;
+    }
+    const first = plan.newMelds[0];
+    const extra = plan.newMelds.length - 1;
+    return `Pegou o lixo (${size} carta${size > 1 ? 's' : ''}): ${cardName(top)} do topo + ${AI.names(fromHand(first))} da mão, ` +
+      `formando jogo novo` + (extra ? ` e abrindo com mais ${extra} sequência${extra > 1 ? 's' : ''}.` : '.');
   },
 
   // Descartar: escolhe a carta.
   decideDiscard(game, seat, level) {
     const hand = game.players[seat].hand;
-    if (hand.length === 1) return hand[0];
+    if (hand.length === 1) {
+      AI.note(`Descartou ${cardName(hand[0])}, a última carta da mão.`);
+      return hand[0];
+    }
     const blackThree = hand.find(isBlackThree);
-    if (blackThree) return blackThree; // trava o lixo para o próximo
+    if (blackThree) {
+      AI.note(`Descartou ${cardName(blackThree)}: o 3 preto trava o lixo para o próximo jogador.`);
+      return blackThree;
+    }
     if (level === 'iniciante') {
       // Às vezes descarta uma carta qualquer (menos curinga), mesmo que seja útil.
       const naturals = hand.filter((c) => !isWild(c));
-      if (naturals.length && Math.random() < 0.25) return naturals[Math.floor(Math.random() * naturals.length)];
-      return AI.rankDiscards(game, seat, 'iniciante')[0].card;
+      if (naturals.length && Math.random() < 0.25) {
+        const c = naturals[Math.floor(Math.random() * naturals.length)];
+        AI.note(`Descartou ${cardName(c)} sem pensar muito (erro de propósito do nível Iniciante).`);
+        return c;
+      }
+      const r = AI.rankDiscards(game, seat, 'iniciante');
+      AI.note(AI.describeDiscard(r));
+      return r[0].card;
     }
     const ranked = AI.rankDiscards(game, seat, 'moderado');
-    if (!AI.LEVELS[level].sim) return ranked[0].card;
+    if (!AI.LEVELS[level].sim) {
+      AI.note(AI.describeDiscard(ranked));
+      return ranked[0].card;
+    }
     // Estratégico e Mestre: comparam os melhores descartes imaginando a continuação.
-    let cands = ranked.filter((r) => r.score < 500).slice(0, AI.SIM.candidates); // curinga só se não houver outra
+    // Cartas iguais (as duas cópias do mesmo 4♠) dão o mesmo resultado: compara cada uma só uma vez.
+    const seen = new Set();
+    const distinct = ranked.filter((r) => {
+      const k = isWild(r.card) ? (isJoker(r.card) ? 'JK' : 'W2') : `${r.card.rank}${r.card.suit}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    let cands = distinct.filter((r) => r.score < 500).slice(0, AI.SIM.candidates); // curinga só se não houver outra
     if (!cands.length) cands = ranked.slice(0, 1);
-    if (cands.length === 1) return cands[0].card;
-    const best = AI.simulateBest(game, seat, level, cands.map((r) => ({ kind: 'discard', card: r.card })));
+    if (cands.length === 1) {
+      AI.note(AI.describeDiscard(ranked));
+      return cands[0].card;
+    }
+    const options = cands.map((r) => ({ kind: 'discard', card: r.card, label: cardName(r.card) }));
+    const best = AI.simulateBest(game, seat, level, options);
+    const chosen = ranked.find((r) => r.card === best.card);
+    AI.note(`${AI.simSummary(options)} Descartou ${cardName(best.card)} (${chosen.why.join(', ')}).`);
     return best.card;
+  },
+
+  // Explica o descarte escolhido e as próximas opções da lista.
+  describeDiscard(ranked) {
+    const [first, ...rest] = ranked;
+    const others = rest.slice(0, 2).map((r) => `${cardName(r.card)} (${r.why.join(', ')})`);
+    return `Descartou ${cardName(first.card)}: ${first.why.join(', ')}.` +
+      (others.length ? ` Próximas opções: ${others.join('; ')}.` : '');
+  },
+
+  // Resumo de uma simulação: média de vantagem de cada opção.
+  simSummary(cands) {
+    const fmt = (v) => (v >= 0 ? '+' : '') + Math.round(v);
+    return `Imaginou ${AI.lastSimRounds} continuações da rodada para cada opção ` +
+      `(vantagem média da dupla no placar imaginado, quanto maior melhor: ${cands.map((c) => `${c.label} ${fmt(c.avg)}`).join(', ')}).`;
   },
 
   /*
@@ -138,16 +262,29 @@ const AI = {
     const hand = p.hand;
     const opponents = game.teams[1 - p.team];
     const list = hand.map((c) => {
-      let s = AI.usefulness(hand, c) * 10;
-      if (isWild(c)) s += 1000;
-      if (opponents.melds.some((m) => Rules.analyzeMeld(m.cards.concat([c])).ok)) s += 60; // ajudaria o adversário
+      const why = []; // motivos, para o modo depuração
+      const u = AI.usefulness(hand, c);
+      let s = u * 10;
+      why.push(u === 0 ? 'carta solta, sem vizinhas na mão' : u >= 3 ? 'tem várias vizinhas na mão' : 'tem vizinha na mão');
+      if (isWild(c)) {
+        s += 1000;
+        why.push('é curinga (só em último caso)');
+      }
+      if (opponents.melds.some((m) => Rules.analyzeMeld(m.cards.concat([c])).ok)) {
+        s += 60; // ajudaria o adversário
+        why.push('encaixa num jogo dos adversários');
+      }
       if (style === 'iniciante') {
         s -= cardValue(c) / 5;
       } else {
         s += cardValue(c) / 5;
-        if (c.rank === 14) s += 40;
+        if (cardValue(c) <= 5 && !isWild(c)) why.push('carta baixa');
+        if (c.rank === 14) {
+          s += 40;
+          why.push('Ás só em último caso');
+        }
       }
-      return { card: c, score: s };
+      return { card: c, score: s, why };
     });
     return list.sort((a, b) => a.score - b.score);
   },
@@ -364,6 +501,10 @@ const AI = {
    * e nenhuma chega fácil a canastra. Melhor guardar as cartas para aumentar a que já existe.
    */
   competesWithRun(melds, cards) {
+    return !!AI.competingRun(melds, cards);
+  },
+  // A sequência de "melds" com que "cards" competiria (ou null).
+  competingRun(melds, cards) {
     const span = (cs) => {
       const n = cs.filter((c) => !isWild(c));
       if (!n.length || n.every((c) => c.rank === 14)) return null; // sequência de Ases não é de naipe
@@ -371,13 +512,13 @@ const AI = {
       return { suit: n[0].suit, lo: Math.min(...ranks), hi: Math.max(...ranks) };
     };
     const a = span(cards);
-    if (!a) return false;
-    return melds.some((m) => {
+    if (!a) return null;
+    return melds.find((m) => {
       const b = span(m);
       if (!b || b.suit !== a.suit) return false;
       const gap = a.hi < b.lo ? b.lo - a.hi - 1 : b.hi < a.lo ? a.lo - b.hi - 1 : -1;
       return gap >= 1 && gap <= 2;
-    });
+    }) || null;
   },
 
   /*
@@ -423,9 +564,26 @@ const AI = {
     const team = game.teamOf(seat);
     const smart = level !== 'iniciante';
     if (smart) {
-      for (const cand of AI.bestOpening(game, seat)) {
+      const cands = AI.bestOpening(game, seat);
+      const desc = (c) => `${c.melds.map(AI.names).join(' + ')} (${c.points} pontos` +
+        (c.cost ? `, custo ${c.cost})` : ', sem gastar curinga)');
+      if (!cands.length) {
+        AI.note(`Ainda não abriu: nenhuma combinação da mão soma ${team.minOpen} pontos nem forma canastra.`);
+        return false;
+      }
+      for (const cand of cands) {
         const plan = { newMelds: cand.melds.map((m) => m.map((c) => c.id)) };
-        if (!AI.wouldStrand(game, seat, plan) && game.applyMelds(seat, plan).ok) return true;
+        if (AI.wouldStrand(game, seat, plan)) {
+          AI.note(`Não abriu com ${desc(cand)}: ficaria com menos de 3 cartas sem canastra limpa.`);
+          continue;
+        }
+        if (game.applyMelds(seat, plan).ok) {
+          const other = cands.find((c) => c !== cand && c.cost > cand.cost);
+          AI.note(`Abriu com ${desc(cand)}. Comparou ${cands.length} jeito${cands.length > 1 ? 's' : ''} de abrir ` +
+            'e ficou com o que gasta menos curingas (custo: coringão 3, coringuinha 2, curinga em jogo fraco +4, ' +
+            'sequências do mesmo naipe disputando cartas +2).' + (other ? ` Exemplo de opção pior: ${desc(other)}.` : ''));
+          return true;
+        }
       }
       return false;
     }
@@ -465,7 +623,10 @@ const AI = {
   // Baixa tudo o que fizer sentido (a tela mostra todas as descidas juntas num só passo).
   meldAll(game, seat, level) {
     const team = game.teamOf(seat);
-    if (level === 'iniciante' && Math.random() < 0.3) return; // às vezes demora para baixar
+    if (level === 'iniciante' && Math.random() < 0.3) { // às vezes demora para baixar
+      AI.note('Não baixou nada nesta vez (erro de propósito do nível Iniciante).');
+      return;
+    }
     if (!team.opened && !AI.tryOpen(game, seat, level)) return;
     for (let guard = 0; guard < 60 && game.phase === 'play'; guard++) {
       if (!AI.nextMeldAction(game, seat, level)) break;
@@ -487,7 +648,18 @@ const AI = {
     const hasClean = Rules.hasCleanCanastra(team.melds);
     const smart = level !== 'iniciante';
     const late = game.stock.length <= 8; // monte acabando: vale baixar o que der (cartas na mão contam contra)
-    const tryPlan = (plan) => !(smart && AI.wouldStrand(game, seat, plan)) && game.applyMelds(seat, plan).ok;
+    // Tenta a jogada; "what" descreve a jogada para as explicações (ex.: "acrescentar 8♣ ao jogo ...").
+    const tryPlan = (plan, what, why = '') => {
+      if (smart && AI.wouldStrand(game, seat, plan)) {
+        AI.note(`Não quis ${what}: ficaria com menos de 3 cartas sem canastra limpa na dupla ` +
+          '(sem conseguir mais baixar nem pegar o lixo).');
+        return false;
+      }
+      if (!game.applyMelds(seat, plan).ok) return false;
+      AI.note(`${what.charAt(0).toUpperCase()}${what.slice(1)}${why ? `: ${why}` : ''}.`.replace(/^Acrescentar/, 'Acrescentou')
+        .replace(/^Fechar/, 'Fechou').replace(/^Baixar/, 'Baixou'));
+      return true;
+    };
     const counts = AI.tableCounts(game);
     // Ordem dos jogos da dupla. Iniciante: os maiores primeiro. Do Moderado em diante: primeiro
     // os que ainda não são canastra e têm chance de virar (os maiores e limpos antes),
@@ -506,9 +678,11 @@ const AI = {
     //    em dois jogos vai para o que está mais perto de virar canastra).
     for (const c of p.hand) {
       if (isWild(c) || isThree(c)) continue;
-      for (const i of order) {
-        if (Rules.analyzeMeld(team.melds[i].cards.concat([c])).ok &&
-            tryPlan({ additions: [{ meldIndex: i, ids: [c.id] }] })) return true;
+      const fits = order.filter((i) => Rules.analyzeMeld(team.melds[i].cards.concat([c])).ok);
+      for (const i of fits) {
+        const why = fits.length > 1 && smart ? `entre ${fits.length} jogos que aceitavam a carta, é o mais perto de virar canastra` : '';
+        if (tryPlan({ additions: [{ meldIndex: i, ids: [c.id] }] },
+          `acrescentar ${cardName(c)} ao jogo ${AI.names(team.melds[i].cards)}`, why)) return true;
       }
     }
     // 2) Curinga para fechar canastra (jogo com 6 cartas e sem curinga).
@@ -517,24 +691,45 @@ const AI = {
     //    Do Moderado em diante, também quando o monte está acabando (garante os 300 pontos).
     const joker = p.hand.find(isJoker);
     const two = p.hand.find(isDirtyWild);
+    const sixes = order.filter((i) => team.melds[i].cards.length === 6 && !team.melds[i].cards.some(isWild));
+    if (two && !joker && sixes.length && !(hasClean || (smart && late))) {
+      AI.note(`Não fechou a canastra ${AI.names(team.melds[sixes[0]].cards)} com ${cardName(two)}: ` +
+        'a dupla ainda não tem canastra limpa, e com o 2 a canastra ficaria suja (sem limpa a dupla não pode bater).');
+    }
     for (const wild of [joker, hasClean || (smart && late) ? two : null]) {
       if (!wild) continue;
-      for (const i of order) {
+      for (const i of sixes) {
         const cards = team.melds[i].cards;
-        if (cards.length === 6 && !cards.some(isWild) &&
-            tryPlan({ additions: [{ meldIndex: i, ids: [wild.id] }] })) return true;
+        if (tryPlan({ additions: [{ meldIndex: i, ids: [wild.id] }] },
+          `fechar a canastra ${AI.names(cards)} com ${cardName(wild)}`,
+          isJoker(wild) ? 'o coringão mantém a canastra limpa (500)' : 'vira canastra suja (300)')) return true;
       }
     }
     // Do Moderado em diante: não baixa sequência nova que vai disputar cartas com outra
     // do mesmo naipe que a dupla já tem na mesa (e ainda não é canastra), salvo no fim do monte.
     const growing = team.melds.filter((m) => !Rules.isCanastra(m.cards)).map((m) => m.cards);
-    const competes = (m) => smart && !late && AI.competesWithRun(growing, m);
+    const competes = (m) => {
+      const rival = smart && !late ? AI.competingRun(growing, m) : null;
+      if (rival) {
+        AI.note(`Guardou ${AI.names(m)} na mão: disputaria cartas com o jogo ${AI.names(rival)} do mesmo naipe ` +
+          '(na mesa os jogos não se juntam; melhor esperar as cartas que faltam para aumentar esse jogo).');
+      }
+      return !!rival;
+    };
+    const keeps = (m) => {
+      const keep = smart && AI.keepInHand(game, seat, m, hasClean);
+      if (keep) {
+        AI.note(`Guardou ${AI.names(m)} na mão: sequência pequena, serve para aumentar jogos e para pegar o lixo ` +
+          `(mão com ${p.hand.length} cartas, monte com ${game.stock.length}).`);
+      }
+      return keep;
+    };
 
     // 3) Sequências novas limpas.
     for (const m of AI.findMelds(p.hand, false)) {
       if (competes(m)) continue;
-      if (smart && AI.keepInHand(game, seat, m, hasClean)) continue;
-      if (tryPlan({ newMelds: [m.map((c) => c.id)] })) return true;
+      if (keeps(m)) continue;
+      if (tryPlan({ newMelds: [m.map((c) => c.id)] }, `baixar ${AI.names(m)}`)) return true;
     }
     // 4) Sequências novas com curinga. Iniciante: com coringão sempre; com 2 só quando a mão
     //    está grande ou já dá para bater. Do Moderado em diante, o curinga fica guardado para
@@ -542,13 +737,27 @@ const AI = {
     //    se a dupla já tem canastra limpa (hora de esvaziar a mão para bater) ou no fim do monte.
     for (const m of AI.findMelds(p.hand, true)) {
       if (!m.some(isWild)) continue;
-      if (Rules.isDirty(m) && !(hasClean || p.hand.length >= 9)) continue;
-      if (smart && !(late || hasClean || p.hand.length >= 12)) continue;
+      const wild = cardName(m.find(isWild));
+      if (Rules.isDirty(m) && !(hasClean || p.hand.length >= 9)) {
+        AI.note(`Não baixou ${AI.names(m)}: com o 2 a sequência fica suja; espera a mão crescer ou a dupla ter canastra limpa.`);
+        continue;
+      }
+      if (smart && !(late || hasClean || p.hand.length >= 12)) {
+        AI.note(`Guardou ${wild} (dava para baixar ${AI.names(m)}): o curinga fica guardado para fechar canastra.`);
+        continue;
+      }
       // Curinga em jogo fraco (pouca chance de canastra) é desperdício, salvo no fim do monte.
-      if (smart && !late && AI.isWeak(m, AI.tableCounts(game, [m]))) continue;
+      if (smart && !late && AI.isWeak(m, AI.tableCounts(game, [m]))) {
+        const r = AI.reach(m, AI.tableCounts(game, [m]));
+        AI.note(`Não pôs ${wild} em ${AI.names(m)}: jogo com pouca chance de canastra ` +
+          `(com as cartas que sobraram, chega no máximo a ${r} cartas).`);
+        continue;
+      }
       if (competes(m)) continue;
-      if (smart && AI.keepInHand(game, seat, m, hasClean)) continue;
-      if (tryPlan({ newMelds: [m.map((c) => c.id)] })) return true;
+      if (keeps(m)) continue;
+      const reason = late ? 'o monte está acabando' : hasClean ? 'a dupla já tem canastra limpa e é hora de esvaziar a mão'
+        : `a mão está grande (${p.hand.length} cartas)`;
+      if (tryPlan({ newMelds: [m.map((c) => c.id)] }, `baixar ${AI.names(m)}`, smart ? `usou curinga porque ${reason}` : '')) return true;
     }
     return false;
   },
@@ -570,15 +779,22 @@ const AI = {
     const start = performance.now();
     const maxRounds = Math.min(cfg.rounds, AI.SIM.maxRounds);
     let rounds = 0;
-    while (rounds < maxRounds && (rounds < 2 || performance.now() - start < cfg.budgetMs)) {
-      const hidden = AI.guessHidden(game, seat, cfg.memory);
-      candidates.forEach((cand, i) => {
-        const g = AI.imagine(game, hidden);
-        AI.applyCandidate(g, seat, cand);
-        totals[i] += AI.rollout(g, team);
-      });
-      rounds++;
+    AI.quiet++; // as jogadas imaginadas não entram nas explicações
+    try {
+      while (rounds < maxRounds && (rounds < 2 || performance.now() - start < cfg.budgetMs)) {
+        const hidden = AI.guessHidden(game, seat, cfg.memory);
+        candidates.forEach((cand, i) => {
+          const g = AI.imagine(game, hidden);
+          AI.applyCandidate(g, seat, cand);
+          totals[i] += AI.rollout(g, team);
+        });
+        rounds++;
+      }
+    } finally {
+      AI.quiet--;
     }
+    candidates.forEach((cand, i) => (cand.avg = totals[i] / rounds)); // média, para as explicações
+    AI.lastSimRounds = rounds;
     let best = 0;
     totals.forEach((t, i) => {
       if (t > totals[best]) best = i;

@@ -45,6 +45,8 @@ const DEFAULT_SETTINGS = () => ({
   pace: 'step',
   levels: { 1: 'moderado', 2: 'moderado', 3: 'moderado' },
   cardSizes: Object.fromEntries(CARD_AREAS.map((a) => [a[0], a[5]])),
+  debug: false,         // modo depuração: explicar as decisões dos bots
+  showBotCards: false,  // modo depuração: mostrar as cartas dos bots
 });
 const SETTINGS_COOKIE = 'canastra-settings';
 
@@ -99,6 +101,8 @@ const UI = {
   levels: { 1: 'moderado', 2: 'moderado', 3: 'moderado' }, // inteligência de cada bot (lugar 1, 2 e 3)
   cardSizes: DEFAULT_SETTINGS().cardSizes,                 // tamanho das cartas de cada área
   characters: drawCharacters(),                            // personagens sorteados ao abrir a página
+  debug: false,                                            // explicar as decisões dos bots
+  showBotCards: false,                                     // mostrar as cartas dos bots
   msg: { text: '', type: 'info' },
   view: null,            // durante a distribuição: o que já foi mostrado na mesa
   eventCursor: 0,        // quantos eventos do jogo já foram animados
@@ -333,9 +337,9 @@ const UI = {
   },
 
   // Espera o jogador confirmar (passo a passo) ou uma pausa (automático).
-  async confirmStep(lines, token) {
+  async confirmStep(lines, token, why = []) {
     if (!lines.length) return;
-    this.narration = { text: lines.join('\n'), waiting: this.pace === 'step', actor: this.actorSeat };
+    this.narration = { text: lines.join('\n'), waiting: this.pace === 'step', actor: this.actorSeat, why };
     this.render();
     if (this.pace === 'step') await new Promise((resolve) => (this.confirmResolve = resolve));
     else await sleep(PACE[this.pace].wait);
@@ -870,13 +874,21 @@ const UI = {
         if (token !== this.token) throw CANCELLED;
         snap = this.snapshot();
         const before = g.events.length + g.log.length;
-        await AI.takeTurn(g, seat, pause, this.levels[seat]);
+        await AI.takeTurn(g, seat, pause, this.levels[seat], this.debug);
         if (g.events.length !== this.eventCursor || g.log.length !== this.logCursor) await pause();
         if (before === g.events.length + g.log.length) throw new Error('o computador não conseguiu jogar');
+        // Modo depuração: os motivos da jogada vão para o quadro da jogada e para o histórico.
+        const why = this.debug ? [...AI.lastTrace] : [];
+        if (why.length) {
+          g.log.push({ text: `Por quê? (${g.players[seat].name})`, seat, why });
+          this.logCursor = g.log.length; // já mostrado: não entra na narração
+          this.narration.why = why;
+          this.render();
+        }
         if (g.phase !== 'roundEnd') {
           turnLines.push(g.current === 0 ? 'Agora é a sua vez!' : `Agora é a vez de ${g.players[g.current].name}.`);
         }
-        if (this.pace === 'step') await this.confirmStep(turnLines, token);
+        if (this.pace === 'step') await this.confirmStep(turnLines, token, why);
       }
       this.actorSeat = null;
       if (this.narration) this.narration.actor = null;
@@ -958,7 +970,12 @@ const UI = {
     el.innerHTML = this.avatarHtml(seat) +
       `<div class="info"><div class="top"><span class="name">${p.name}</span>${dealer}<span class="role"><span class="role-name">${this.roleOf(seat)}</span>` +
       `${seat ? ` · ${AI.LEVELS[this.levels[seat]].label}` : ''}</span>${playing}</div>` +
-      `<div class="mid"><div class="stack"></div><span class="count">${n}</span><span class="unit">cartas</span></div></div>`;
+      `<div class="mid"><div class="stack"></div><span class="count">${n}</span><span class="unit">cartas</span></div>` +
+      // Modo depuração: as cartas do bot viradas para cima.
+      (this.showBotCards && seat && n
+        ? `<div class="bot-hand" title="Cartas de ${p.name} (modo depuração)">${cardTagsHtml(sortHand(this.handOf(seat)).map(cardName).join(' '))}</div>`
+        : '') +
+      '</div>';
     // Pilha de versos deslocados para o lado: quanto mais cartas, mais "grossa".
     const stack = el.querySelector('.stack');
     const layers = Math.min(n, 12);
@@ -1175,6 +1192,10 @@ const UI = {
       t.innerHTML = cardTagsHtml(this.narration.text);
       box.appendChild(t);
     }
+    // Modo depuração: os motivos de cada decisão do bot.
+    if (this.debug && this.narration && this.narration.why && this.narration.why.length) {
+      box.appendChild(this.whyEl(this.narration.why, true));
+    }
     if (this.narration && this.narration.waiting) {
       const b = document.createElement('button');
       b.className = 'btn-primary';
@@ -1368,11 +1389,26 @@ const UI = {
     el.innerHTML = '';
     // Só mostra o que já foi animado/narrado, para não adiantar as jogadas.
     for (const entry of g.log.slice(0, this.logCursor).slice(-60).reverse()) {
+      if (entry.why && !this.debug) continue; // explicações só no modo depuração
       const li = document.createElement('li');
-      li.innerHTML = cardTagsHtml(entry.text);
       li.className = entry.seat === null ? 'system' : 'team-' + (entry.seat % 2);
+      if (entry.why) {
+        li.classList.add('debug');
+        li.appendChild(this.whyEl(entry.why, false, entry.text));
+      } else {
+        li.innerHTML = cardTagsHtml(entry.text);
+      }
       el.appendChild(li);
     }
+  },
+
+  // Caixa "Por quê?" com os motivos das decisões de um bot (modo depuração).
+  whyEl(why, open, title = 'Por quê?') {
+    const d = document.createElement('details');
+    d.className = 'why';
+    d.open = open;
+    d.innerHTML = `<summary>${title}</summary><ul>${why.map((w) => `<li>${cardTagsHtml(w)}</li>`).join('')}</ul>`;
+    return d;
   },
 
   // ---------- Janelas ----------
@@ -1431,10 +1467,15 @@ const UI = {
       const ok = s.cardSizes && CARD_SIZES.some(([k]) => k === s.cardSizes[area]);
       this.cardSizes[area] = ok ? s.cardSizes[area] : d.cardSizes[area];
     }
+    this.debug = typeof s.debug === 'boolean' ? s.debug : d.debug;
+    this.showBotCards = typeof s.showBotCards === 'boolean' ? s.showBotCards : d.showBotCards;
     this.applyCardSizes();
   },
   saveSettings() {
-    this.writeStoredSettings({ pace: this.pace, levels: this.levels, cardSizes: this.cardSizes });
+    this.writeStoredSettings({
+      pace: this.pace, levels: this.levels, cardSizes: this.cardSizes,
+      debug: this.debug, showBotCards: this.showBotCards,
+    });
   },
   // Volta tudo ao padrão e apaga o que estava guardado.
   resetSettings() {
@@ -1493,7 +1534,17 @@ const UI = {
         <select data-area="${area}">${options(
           CARD_SIZES.map(([k, name]) => [k, k === def ? `${name} (padrão)` : name]), this.cardSizes[area])}</select>
       </div>`).join('')}
-      <p class="set-note">Cada tamanho é igual em todas as áreas. As configurações ficam guardadas num cookie deste navegador.</p>
+      <p class="set-note">Cada tamanho é igual em todas as áreas.</p>
+      <h3>Depuração</h3>
+      <label class="set-row set-check">
+        <div class="set-who"><b>Explicar as decisões dos bots</b><span>cada jogada de bot ganha um "Por quê?" no quadro da jogada e no histórico</span></div>
+        <input type="checkbox" id="set-debug"${this.debug ? ' checked' : ''}>
+      </label>
+      <label class="set-row set-check">
+        <div class="set-who"><b>Mostrar as cartas dos bots</b><span>as mãos dos bots aparecem viradas para cima (só para estudar as jogadas)</span></div>
+        <input type="checkbox" id="set-botcards"${this.showBotCards ? ' checked' : ''}>
+      </label>
+      <p class="set-note">As configurações ficam guardadas num cookie deste navegador.</p>
       <div class="modal-actions">
         <button class="btn-light" id="btn-settings-reset" title="Volta o ritmo, a inteligência dos bots e o tamanho das cartas ao padrão">Restaurar padrão</button>
         <button class="btn-primary" id="btn-settings-close">Pronto</button>
@@ -1519,6 +1570,16 @@ const UI = {
         this.saveSettings();
       };
     });
+    $('set-debug').onchange = (e) => {
+      this.debug = e.target.checked;
+      this.saveSettings();
+      this.render();
+    };
+    $('set-botcards').onchange = (e) => {
+      this.showBotCards = e.target.checked;
+      this.saveSettings();
+      this.render();
+    };
     $('btn-settings-reset').onclick = () => {
       this.resetSettings();
       this.showSettings(); // redesenha a janela com os valores padrão

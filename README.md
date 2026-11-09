@@ -89,6 +89,14 @@ Cada bot pode ter um nível diferente. O nível aparece no quadro do jogador, ao
 | **Mestre** | Como o Estratégico, mas decora o lixo inteiro e as cartas que cada jogador pegou dele, então imagina as mãos dos outros com mais acerto. |
 
 Nenhum bot trapaceia: nenhum vê a sua mão, a mão dos outros ou a ordem do monte.
+
+### Modo depuração
+
+Na engrenagem, em **Depuração**, há duas opções (desligadas por padrão):
+- **Explicar as decisões dos bots:** cada jogada de bot ganha um **"Por quê?"** no quadro da jogada e no histórico, com o motivo de cada decisão: por que comprou do monte ou pegou o lixo, como abriu, por que guardou ou baixou uma sequência, onde pôs o curinga e por que descartou aquela carta (com as próximas opções). Nos níveis Estratégico e Mestre aparece também o resultado médio das jogadas que ele imaginou para cada opção.
+- **Mostrar as cartas dos bots:** as mãos dos bots aparecem viradas para cima no quadro de cada um, para conferir se as decisões fazem sentido.
+
+As explicações usam só o que o bot sabe de verdade; mostrar as cartas é só para você estudar as jogadas.
 - O visual usa a fonte Inter, que vem da internet. Sem internet, o jogo funciona normalmente com a fonte do sistema.
 
 ## Decisões tomadas onde o regulamento não era explícito

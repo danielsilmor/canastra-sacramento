@@ -7,8 +7,10 @@
  * não for permitida, nada muda e volta uma mensagem explicando o motivo.
  *
  * Lugares na mesa (sentido horário, como aparece na tela):
- *   0 = Você (embaixo)   1 = João (esquerda)   2 = Beatriz (em cima, sua parceira)   3 = Rafael (direita)
- * Duplas: "Nós" = Você + Beatriz, "Eles" = João + Rafael.
+ *   0 = Você   1 = adversário   2 = parceiro(a)   3 = adversário
+ * Duplas: "Nós" = lugares 0 e 2, "Eles" = lugares 1 e 3.
+ * Os nomes dos bots vêm dos personagens sorteados pela tela (ui.js);
+ * sem eles (nos testes), valem os nomes abaixo.
  */
 
 const PLAYER_NAMES = ['Você', 'João', 'Beatriz', 'Rafael'];
@@ -18,7 +20,8 @@ const fail = (error) => ({ ok: false, error });
 class Game {
   constructor(options = {}) {
     const humanSeat = options.allBots ? -1 : 0;
-    this.players = PLAYER_NAMES.map((name, seat) => ({
+    const names = options.names || PLAYER_NAMES;
+    this.players = names.map((name, seat) => ({
       seat, name, team: seat % 2, hand: [], isHuman: seat === humanSeat,
     }));
     this.teams = [

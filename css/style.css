@@ -163,8 +163,9 @@ button.btn-gear:hover svg { transform: rotate(60deg); }
   transition: background 0.2s, border-color 0.2s;
 }
 .player .top { display: flex; align-items: center; gap: 8px; min-height: 20px; }
-.player .name { font-size: 14px; color: var(--muted); font-weight: 500; }
-.player .role { font-size: 12px; color: var(--muted-2); }
+.player .name { font-size: 14px; color: var(--text); font-weight: 500; }
+.player .role { font-size: 12px; color: var(--muted-2); }       /* nível de inteligência */
+.player .role .role-name { color: var(--muted); }                /* parceiro(a) / adversário(a) */
 .player .dealer {
   width: 18px;
   height: 18px;
@@ -267,7 +268,24 @@ button.btn-gear:hover svg { transform: rotate(60deg); }
 .side { grid-area: side; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
 .narration { display: flex; flex-direction: column; gap: 8px; min-height: 150px; padding: 20px; }
 .narration .label { font-size: 13px; color: var(--muted); }
-.narration .who { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; }
+.narration .who { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; }
+
+/* Fotos dos personagens (bots): o busto inteiro, sem moldura, com fundo transparente.
+   A altura é fixa e a largura acompanha a proporção de cada imagem. */
+.avatar {
+  height: 54px;
+  width: auto;
+  flex: none;
+  user-select: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+.avatar.narr { height: 40px; }
+.avatar.small { height: 42px; }
+.player .info { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.player:has(.avatar) { flex-direction: row; align-items: flex-end; gap: 12px; }
+/* No quadro do jogador, a base da foto fica alinhada com a base das cartas */
+.player .avatar { height: 66px; }
+.modal-box .set-row .set-who { flex: 1; }
 .narration .who.mine { color: var(--green); }
 .narration .what { font-size: 14px; color: var(--text-2); line-height: 1.5; white-space: pre-line; margin-top: 4px; max-height: 260px; overflow: auto; }
 .narration button { margin-top: 8px; width: 100%; }

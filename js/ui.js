@@ -73,7 +73,21 @@ const ICON_CLEAR_CARDS =
   '<rect x="9" y="3" width="12" height="18" rx="2"/>' +
   '<path d="m6 6.6-1.6.6a2 2 0 0 0-1.2 2.6l3.4 9a2 2 0 0 0 2.4 1.2"/>' +
   '<path d="m12.5 9.5 5 5"/><path d="m17.5 9.5-5 5"/></svg>';
-const ROLE = ['você', 'adversário', 'sua parceira', 'adversário'];
+// Personagens dos bots: [nome, arquivo da imagem em img/avatars, feminino?].
+// A cada vez que a página abre (ou é atualizada), 3 deles são sorteados para a mesa.
+// "Nova partida" mantém os mesmos personagens.
+const CHARACTERS = [
+  ['Aline', 'aline', true], ['Amara', 'amara', true], ['Cida', 'cida', true], ['Kátia', 'katia', true],
+  ['Melina', 'melina', true], ['Raíssa', 'raissa', true], ['Soraia', 'soraia', true], ['Thuana', 'thuana', true],
+  ['Danilo', 'danilo', false], ['Galvão', 'galvao', false], ['Lucas', 'lucas', false], ['Luiz', 'luiz', false],
+  ['Pipe', 'pipe', false], ['Ricardo', 'ricardo', false], ['Sóstenes', 'sostenes', false], ['Vitor', 'vitor', false],
+].map(([name, file, female]) => ({ name, img: `img/avatars/${file}.png`, female }));
+
+// Sorteia 3 personagens diferentes para os lugares 1, 2 e 3.
+function drawCharacters() {
+  const pool = shuffle([...CHARACTERS]);
+  return { 1: pool[0], 2: pool[1], 3: pool[2] };
+}
 
 const UI = {
   game: null,
@@ -84,6 +98,7 @@ const UI = {
   pace: 'step',
   levels: { 1: 'moderado', 2: 'moderado', 3: 'moderado' }, // inteligência de cada bot (lugar 1, 2 e 3)
   cardSizes: DEFAULT_SETTINGS().cardSizes,                 // tamanho das cartas de cada área
+  characters: drawCharacters(),                            // personagens sorteados ao abrir a página
   msg: { text: '', type: 'info' },
   view: null,            // durante a distribuição: o que já foi mostrado na mesa
   eventCursor: 0,        // quantos eventos do jogo já foram animados
@@ -120,7 +135,8 @@ const UI = {
     if (this.confirmResolve) this.confirmResolve();
     this.confirmResolve = null;
     this.busy = false;
-    this.game = new Game();
+    const c = this.characters; // os mesmos personagens a cada nova partida
+    this.game = new Game({ names: ['Você', c[1].name, c[2].name, c[3].name] });
     this.eventCursor = 0;
     this.logCursor = 0;
     this.game.newMatch();
@@ -129,7 +145,7 @@ const UI = {
     this.freshIds = new Set();
     this.narration = null;
     this.hideModal();
-    this.say('Nova partida! Você joga em dupla com a Beatriz, contra João e Rafael.');
+    this.say(`Nova partida! Você joga em dupla com ${c[2].name}, contra ${c[1].name} e ${c[3].name}.`);
     this.playRoundStart();
   },
 
@@ -186,6 +202,18 @@ const UI = {
 
   get me() {
     return this.game.players[0];
+  },
+  // Papel de cada lugar, no feminino ou masculino conforme o personagem sorteado.
+  roleOf(seat) {
+    if (seat === 0) return 'você';
+    const f = this.characters[seat].female;
+    if (seat === 2) return f ? 'sua parceira' : 'seu parceiro';
+    return f ? 'adversária' : 'adversário';
+  },
+  // Foto redonda do personagem do bot.
+  avatarHtml(seat, cls = '') {
+    const c = this.characters[seat];
+    return seat && c ? `<img class="avatar ${cls}" src="${c.img}" alt="" draggable="false">` : '';
   },
   get myTeam() {
     return this.game.teams[0];
@@ -927,10 +955,10 @@ const UI = {
     const playing = active
       ? `<span class="chip ${seat === 0 ? 'green' : 'yellow'} tiny playing">${seat === 0 ? 'sua vez' : 'jogando'}</span>` : '';
     const n = this.handOf(seat).length;
-    el.innerHTML =
-      `<div class="top"><span class="name">${p.name}</span>${dealer}<span class="role">${ROLE[seat]}` +
+    el.innerHTML = this.avatarHtml(seat) +
+      `<div class="info"><div class="top"><span class="name">${p.name}</span>${dealer}<span class="role"><span class="role-name">${this.roleOf(seat)}</span>` +
       `${seat ? ` · ${AI.LEVELS[this.levels[seat]].label}` : ''}</span>${playing}</div>` +
-      `<div class="mid"><div class="stack"></div><span class="count">${n}</span><span class="unit">cartas</span></div>`;
+      `<div class="mid"><div class="stack"></div><span class="count">${n}</span><span class="unit">cartas</span></div></div>`;
     // Pilha de versos deslocados para o lado: quanto mais cartas, mais "grossa".
     const stack = el.querySelector('.stack');
     const layers = Math.min(n, 12);
@@ -970,7 +998,7 @@ const UI = {
       : `<span class="chip">abertura: ${team.minOpen} pontos ou canastra</span>`;
     el.innerHTML =
       `<div class="panel-header"><span class="panel-title">${t === 0 ? 'Nós' : 'Eles'}</span>` +
-      `<span class="panel-sub">${t === 0 ? 'você e Beatriz' : 'João e Rafael'}</span>${status}</div>`;
+      `<span class="panel-sub">${t === 0 ? `você e ${g.players[2].name}` : `${g.players[1].name} e ${g.players[3].name}`}</span>${status}</div>`;
 
     const row = document.createElement('div');
     row.className = 'melds';
@@ -1128,7 +1156,7 @@ const UI = {
       who = 'Distribuindo';
     } else if (this.narration && this.narration.actor != null) {
       label = 'Jogada de';
-      who = g.players[this.narration.actor].name;
+      who = this.avatarHtml(this.narration.actor, 'narr') + g.players[this.narration.actor].name;
     } else if (g.phase === 'roundEnd') {
       label = `Rodada ${g.round}`;
       who = g.matchOver ? 'Fim da partida' : 'Fim da rodada';
@@ -1138,7 +1166,7 @@ const UI = {
       mine = true;
     } else {
       label = 'Vez de';
-      who = g.players[g.current].name;
+      who = this.avatarHtml(g.current, 'narr') + g.players[g.current].name;
     }
     box.innerHTML = `<div class="label">${label}</div><div class="who ${mine ? 'mine' : ''}">${who}</div>`;
     if (this.narration && this.narration.text) {
@@ -1438,10 +1466,10 @@ const UI = {
     const options = (list, current) => list
       .map(([value, label]) => `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`).join('');
     const levelList = Object.entries(AI.LEVELS).map(([k, v]) => [k, v.label]);
-    // Bots na ordem em que jogam: João, Beatriz, Rafael.
+    // Bots na ordem em que jogam (lugares 1, 2 e 3).
     const bots = [1, 2, 3].map((seat) => `
       <div class="set-row">
-        <div class="set-who"><b>${this.game.players[seat].name}</b><span>${ROLE[seat]}</span></div>
+        ${this.avatarHtml(seat, 'small')}<div class="set-who"><b>${this.game.players[seat].name}</b><span>${this.roleOf(seat)}</span></div>
         <select data-seat="${seat}">${options(levelList, this.levels[seat])}</select>
       </div>`).join('');
     this.showModal(`
@@ -1627,7 +1655,7 @@ const UI = {
     this.showModal(`
       <h2>Regras resumidas</h2>
       <h3>Objetivo</h3>
-      <ul><li>Duplas: você + Beatriz contra João + Rafael. Vence quem chegar a 5.000 pontos.</li></ul>
+      <ul><li>Duplas: você + ${this.game.players[2].name} contra ${this.game.players[1].name} + ${this.game.players[3].name}. Vence quem chegar a 5.000 pontos.</li></ul>
       <h3>Como jogar a sua vez</h3>
       <ul>
         <li><b>1. Comprar:</b> clique no monte (ou arraste-o para a sua mão), <i>ou</i> pegue o lixo: selecione 2+ cartas da mão que formem sequência com a carta do topo e clique no lixo. Elas viram um jogo novo ou, se couberem, são encaixadas num jogo da dupla (para escolher o jogo, clique nele).</li>

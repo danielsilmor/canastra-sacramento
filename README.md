@@ -1,7 +1,7 @@
 # Canastra Sacramento: versão de teste (MVP)
 
 Jogo de Canastra no navegador, seguindo o regulamento da modalidade personalizada.
-Você joga em dupla com a Beatriz (computador) contra João e Rafael, também do computador.
+Você joga em dupla com um bot (computador) contra outros dois bots. Os bots são personagens com foto, sorteados entre 16 a cada vez que a página abre ou é atualizada; "Nova partida" mantém os mesmos personagens.
 
 ## Jogar online
 
@@ -72,14 +72,14 @@ O botão **Regras** mostra um resumo das regras.
 - Na coluna da esquerda fica o **histórico**. A setinha ▲ esconde o histórico, e a setinha ▼ mostra de novo.
 - Abaixo do histórico fica o **quadro da jogada**, que diz de quem é a vez, narra cada jogada e tem o botão **Continuar**.
 - No ritmo **Passo a passo** (padrão), cada computador faz a jogada completa (comprar, baixar e descartar, tudo animado) e depois espera você clicar em **Continuar** (ou apertar Enter). O quadro mostra o resumo de tudo o que ele fez.
-- No alto da mesa ficam os 4 jogadores **na ordem em que jogam** (Você → João → Beatriz → Rafael), cada um com uma pilha de cartas (mais grossa quanto mais cartas tiver) e o número exato. O "D" indica o carteador.
+- No alto da mesa ficam os 4 jogadores **na ordem em que jogam** (você, adversário, parceiro e adversário), cada um com a foto do personagem (nos bots), com uma pilha de cartas (mais grossa quanto mais cartas tiver) e o número exato. O "D" indica o carteador.
 - O jogador da vez fica com contorno amarelo e a etiqueta "jogando". Na sua vez, o contorno e a etiqueta ficam verdes.
 - As cartas da última jogada ficam com **brilho amarelo**. Cartas com **pontinho laranja** são curingas (2 e coringão).
 - Na **engrenagem** (⚙, no topo) ficam as configurações: o **ritmo do jogo** (passo a passo ou automático lento, normal ou rápido, sem confirmações) e a **inteligência de cada bot**, além do **tamanho das cartas**, que pode ser escolhido separadamente para os jogos na mesa (inclui a área de abertura), a sua mão e o monte/lixo, em 5 tamanhos (de "Muito pequeno" a "Muito grande"). Cada tamanho é igual em todas as áreas; por padrão, as cartas da mesa são "Pequeno" e as da mão e do monte/lixo são "Grande". As escolhas ficam guardadas num **cookie** do navegador (ao abrir o `index.html` direto do computador, ficam no armazenamento local), e o botão **"Restaurar padrão"** volta tudo ao início.
 
 ### Inteligência dos bots
 
-Cada bot (João, Beatriz e Rafael) pode ter um nível diferente. O nível aparece no quadro do jogador, ao lado do papel (por exemplo, "adversário · Mestre"). A mudança vale a partir da próxima jogada do bot.
+Cada bot pode ter um nível diferente. O nível aparece no quadro do jogador, ao lado do papel (por exemplo, "adversário · Mestre"). A mudança vale a partir da próxima jogada do bot.
 
 | Nível | Como joga |
 |---|---|

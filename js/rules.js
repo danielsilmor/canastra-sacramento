@@ -214,7 +214,7 @@ const Rules = {
     const bate = wentOut ? 100 : 0;
     const redCount = team.redThrees.length;
     let redThrees = redCount === 4 ? 500 : redCount * 100;
-    if (clean + dirty === 0) redThrees = -redThrees; // sem canastra, os 3 vermelhos são negativos
+    if (clean + dirty === 0 && redThrees) redThrees = -redThrees; // sem canastra, os 3 vermelhos são negativos
     const hand = this.pointsOf(handCards);
     const total = meldCards + canastras + bate + redThrees - hand;
     return { meldCards, clean, dirty, canastras, bate, redCount, redThrees, hand, total };

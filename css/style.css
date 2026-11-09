@@ -501,12 +501,25 @@ button.meld-undo:hover:not(:disabled) { background: var(--surface-3); color: var
 .modal-box h3 { margin: 22px 0 8px; font-size: 15px; font-weight: 600; }
 .modal-box p { color: var(--muted); margin: 6px 0; font-size: 14px; }
 .modal-box p strong { color: var(--text); font-size: 17px; }
-.modal-box table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+.modal-box table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 14px 0; font-size: 14px; }
 .modal-box th { color: var(--muted); font-weight: 500; font-size: 13px; }
 .modal-box th, .modal-box td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: right; }
 .modal-box th:first-child, .modal-box td:first-child { text-align: left; }
 .modal-box td:first-child { color: var(--text-2); }
-.modal-box tr.total td { font-weight: 600; color: var(--text); border-bottom: none; border-top: 1px solid var(--surface-3); }
+/* Tarja "Total da rodada": fundo cinza, borda verde e cantos arredondados */
+.modal-box tr.total td {
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border-top: 1.5px solid rgba(48, 209, 88, 0.6);
+  border-bottom: 1.5px solid rgba(48, 209, 88, 0.6);
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.modal-box tr.total td:first-child { border-left: 1.5px solid rgba(48, 209, 88, 0.6); border-radius: 12px 0 0 12px; padding-left: 14px; }
+.modal-box tr.total td:last-child { border-right: 1.5px solid rgba(48, 209, 88, 0.6); border-radius: 0 12px 12px 0; padding-right: 14px; }
+/* Linha logo acima da tarja: sem a risca de baixo, para a tarja respirar */
+.modal-box tr:has(+ tr.total) td { border-bottom: none; }
 .modal-box ul { padding-left: 18px; color: var(--text-2); font-size: 14px; line-height: 1.5; }
 .modal-box li { margin-bottom: 5px; }
 /* Placar acumulado em destaque */
@@ -515,7 +528,7 @@ button.meld-undo:hover:not(:disabled) { background: var(--surface-3); color: var
 .hero-score .label { font-size: 13px; color: var(--muted); }
 .hero-score .value { font-size: 36px; font-weight: 600; letter-spacing: -0.8px; line-height: 1.15; }
 .hero-score .delta { font-size: 13px; color: var(--muted); }
-.hero-score.us { box-shadow: inset 0 0 0 1.5px rgba(48, 209, 88, 0.55); }
+.hero-score.us { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.14); }
 
 /* Cartas que ficaram na mão: recolhido, com um botão + para expandir (vira − quando aberto) */
 .hands-box { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 12px; }

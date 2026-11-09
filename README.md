@@ -84,7 +84,7 @@ Cada bot pode ter um nível diferente. O nível aparece no quadro do jogador, ao
 | Nível | Como joga |
 |---|---|
 | **Iniciante** | Bom senso, mas comete erros de propósito: às vezes não pega o lixo, demora para baixar ou descarta uma carta útil. |
-| **Moderado** (padrão) | Prefere aumentar os jogos da mesa a baixar várias sequências pequenas (guarda trincas na mão para pegar o lixo). Usa curinga (coringão ou coringuinha) para fechar canastra com 6 cartas, em vez de pegar o lixo. Descarta cartas baixas e só solta o Ás em último caso. |
+| **Moderado** (padrão) | Prefere aumentar os jogos da mesa a baixar várias sequências pequenas (guarda trincas na mão para pegar o lixo). Guarda o coringão para fechar canastra com 6 cartas (em vez de pegar o lixo ou começar jogo novo com ele). Só fecha canastra com coringuinha se a dupla já tem uma limpa ou o monte está no fim, porque sem canastra limpa não dá para bater. Não fica com menos de 3 cartas na mão sem canastra limpa (senão fica "preso", sem conseguir baixar nem pegar o lixo). Descarta cartas baixas e só solta o Ás em último caso. Estratégico e Mestre seguem essas mesmas regras ao baixar. |
 | **Estratégico** | Antes de comprar e de descartar, imagina dezenas de continuações da rodada para cada opção (sorteando as cartas que não vê) e escolhe a que rende mais pontos. Do lixo, só conhece a carta de cima. |
 | **Mestre** | Como o Estratégico, mas decora o lixo inteiro e as cartas que cada jogador pegou dele, então imagina as mãos dos outros com mais acerto. |
 

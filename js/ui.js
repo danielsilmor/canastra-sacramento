@@ -1459,7 +1459,7 @@ const UI = {
     ];
     const levelHelp = {
       iniciante: 'Joga com bom senso, mas comete alguns erros: às vezes não pega o lixo, demora para baixar ou descarta uma carta útil.',
-      moderado: 'Prefere aumentar os jogos da mesa a baixar várias sequências pequenas, usa curinga para fechar canastra em vez de pegar o lixo, descarta cartas baixas e só solta o Ás em último caso.',
+      moderado: 'Prefere aumentar os jogos da mesa a baixar várias sequências pequenas, guarda o coringão para fechar canastra (em vez de começar jogo novo com ele), só usa o coringuinha para fechar canastra se a dupla já tem uma limpa, não fica com menos de 3 cartas sem canastra limpa, descarta cartas baixas e só solta o Ás em último caso.',
       estrategico: 'Antes de comprar e de descartar, imagina várias continuações da rodada para cada opção e escolhe a que rende mais pontos. Do lixo, só conhece a carta de cima.',
       mestre: 'Como o Estratégico, mas decora o lixo inteiro e as cartas que cada jogador pegou dele. Por isso imagina melhor as mãos dos outros.',
     };

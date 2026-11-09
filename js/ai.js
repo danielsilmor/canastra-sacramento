@@ -4,7 +4,9 @@
  * Quatro níveis de inteligência (escolhidos na engrenagem, para cada bot):
  *   Iniciante    joga com bom senso, mas comete alguns erros de propósito.
  *   Moderado     prefere aumentar os jogos da mesa a baixar várias sequências pequenas,
- *                usa curinga para fechar canastra em vez de pegar o lixo,
+ *                guarda o coringão para fechar canastra (não começa jogo novo com ele),
+ *                só fecha canastra com coringuinha se a dupla já tem uma limpa,
+ *                não fica com menos de 3 cartas sem canastra limpa (senão fica "preso"),
  *                descarta cartas baixas e só solta o Ás em último caso.
  *   Estratégico  antes de comprar e de descartar, "imagina" várias continuações da rodada
  *                para cada opção e escolhe a que rende mais pontos. Do lixo, só conhece
@@ -151,7 +153,9 @@ const AI = {
   wildClosesCanastra(game, seat) {
     const team = game.teamOf(seat);
     const hand = game.players[seat].hand;
-    if (!team.opened || !hand.some(isWild)) return false;
+    // Coringão sempre serve; o 2 só fecha canastra se a dupla já tem limpa ou o monte está no fim.
+    const twoOk = Rules.hasCleanCanastra(team.melds) || game.stock.length <= 8;
+    if (!team.opened || !hand.some((c) => isJoker(c) || (isDirtyWild(c) && twoOk))) return false;
     return team.melds.some((m) => {
       if (m.cards.some(isWild) || Rules.isCanastra(m.cards)) return false;
       if (m.cards.length === 6) return true;
@@ -294,28 +298,48 @@ const AI = {
   },
 
   // Tenta abrir o jogo da dupla com as sequências da mão.
-  tryOpen(game, seat) {
+  tryOpen(game, seat, level) {
     const p = game.players[seat];
     const team = game.teamOf(seat);
+    const smart = level !== 'iniciante';
     for (const allowDirty of [false, true]) {
       const melds = AI.findMelds(p.hand, allowDirty).sort(
         (a, b) => Rules.pointsOf(b) - Rules.pointsOf(a)
       );
       while (melds.length) {
         if (!Rules.opensGame(melds, team.minOpen)) break; // mínimo de pontos ou canastra
-        const r = game.applyMelds(seat, { newMelds: melds.map((m) => m.map((c) => c.id)) });
-        if (r.ok) return true;
+        const plan = { newMelds: melds.map((m) => m.map((c) => c.id)) };
+        if (!(smart && AI.wouldStrand(game, seat, plan)) && game.applyMelds(seat, plan).ok) return true;
         melds.pop(); // tira a menor e tenta de novo
       }
     }
     return false;
   },
 
+  /*
+   * Moderado em diante: a jogada deixaria o bot "preso"?
+   * Sem canastra limpa na dupla não dá para bater; com 1 carta na mão o bot não consegue
+   * mais baixar nem pegar o lixo (que pede 2 cartas da mão) e fica só comprando e descartando.
+   * Por isso ele não baixa se ficaria com menos de 3 cartas (2 depois do descarte),
+   * a não ser que a própria jogada feche uma canastra limpa ou o monte esteja no fim.
+   */
+  wouldStrand(game, seat, plan) {
+    const hand = game.players[seat].hand;
+    const team = game.teamOf(seat);
+    if (Rules.hasCleanCanastra(team.melds) || game.stock.length <= 4) return false;
+    const byId = (id) => hand.find((c) => c.id === id);
+    const newMelds = (plan.newMelds || []).map((ids) => ids.map(byId));
+    const additions = (plan.additions || []).map((a) => team.melds[a.meldIndex].cards.concat(a.ids.map(byId)));
+    const used = newMelds.flat().length + (plan.additions || []).reduce((s, a) => s + a.ids.length, 0);
+    if (hand.length - used >= 3) return false;
+    return ![...newMelds, ...additions].some((cards) => Rules.isCleanCanastra(cards));
+  },
+
   // Baixa tudo o que fizer sentido (a tela mostra todas as descidas juntas num só passo).
   meldAll(game, seat, level) {
     const team = game.teamOf(seat);
     if (level === 'iniciante' && Math.random() < 0.3) return; // às vezes demora para baixar
-    if (!team.opened && !AI.tryOpen(game, seat)) return;
+    if (!team.opened && !AI.tryOpen(game, seat, level)) return;
     for (let guard = 0; guard < 60 && game.phase === 'play'; guard++) {
       if (!AI.nextMeldAction(game, seat, level)) break;
     }
@@ -335,7 +359,8 @@ const AI = {
     const team = game.teamOf(seat);
     const hasClean = Rules.hasCleanCanastra(team.melds);
     const smart = level !== 'iniciante';
-    const tryPlan = (plan) => game.applyMelds(seat, plan).ok;
+    const late = game.stock.length <= 8; // monte acabando: vale baixar o que der (cartas na mão contam contra)
+    const tryPlan = (plan) => !(smart && AI.wouldStrand(game, seat, plan)) && game.applyMelds(seat, plan).ok;
     const order = team.melds.map((m, i) => i).sort((a, b) => team.melds[b].cards.length - team.melds[a].cards.length);
 
     // 1) Acrescentar cartas naturais aos jogos da dupla (prioriza os maiores).
@@ -347,11 +372,12 @@ const AI = {
       }
     }
     // 2) Curinga para fechar canastra (jogo com 6 cartas e sem curinga).
-    //    Coringão: sempre (continua limpa). Coringuinha (2): Iniciante só se a dupla já tem
-    //    uma limpa; do Moderado em diante, sempre (vira canastra suja, 300 pontos).
+    //    Coringão: sempre (continua limpa). Coringuinha (2): só se a dupla já tem uma limpa,
+    //    porque a canastra fica suja e, sem nenhuma limpa, a dupla não consegue bater.
+    //    Do Moderado em diante, também quando o monte está acabando (garante os 300 pontos).
     const joker = p.hand.find(isJoker);
     const two = p.hand.find(isDirtyWild);
-    for (const wild of [joker, smart || hasClean ? two : null]) {
+    for (const wild of [joker, hasClean || (smart && late) ? two : null]) {
       if (!wild) continue;
       for (const i of order) {
         const cards = team.melds[i].cards;
@@ -364,11 +390,14 @@ const AI = {
       if (smart && AI.keepInHand(game, seat, m, hasClean)) continue;
       if (tryPlan({ newMelds: [m.map((c) => c.id)] })) return true;
     }
-    // 4) Sequências novas com curinga: com coringão sempre (é limpa);
-    //    com 2 só quando a mão está grande ou já dá para bater.
+    // 4) Sequências novas com curinga. Iniciante: com coringão sempre; com 2 só quando a mão
+    //    está grande ou já dá para bater. Do Moderado em diante, o curinga fica guardado para
+    //    fechar canastras: só começa jogo novo com ele se a mão está muito grande (12+),
+    //    se a dupla já tem canastra limpa (hora de esvaziar a mão para bater) ou no fim do monte.
     for (const m of AI.findMelds(p.hand, true)) {
       if (!m.some(isWild)) continue;
       if (Rules.isDirty(m) && !(hasClean || p.hand.length >= 9)) continue;
+      if (smart && !(late || hasClean || p.hand.length >= 12)) continue;
       if (smart && AI.keepInHand(game, seat, m, hasClean)) continue;
       if (tryPlan({ newMelds: [m.map((c) => c.id)] })) return true;
     }

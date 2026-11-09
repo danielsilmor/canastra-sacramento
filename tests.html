@@ -21,6 +21,8 @@
   <script src="js/rules.js"></script>
   <script src="js/game.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/mestre.js"></script>
+  <script src="js/arena.js"></script>
   <script>
     const results = [];
     function check(name, condition, detail = '') {
@@ -193,6 +195,113 @@
         h.teams[0].melds.length === 1 && run.length === 9, h.teams[0].melds.map((m) => m.cards.map(cardName).join(' ')).join(' | '));
     }
 
+    // --- Simulação: as cartas imaginadas respeitam as regras ---
+    {
+      // Os 3 vermelhos que faltam ficam sempre no monte (nunca na mão nem no lixo imaginados).
+      const s = new Game({ allBots: true });
+      s.newMatch();
+      let ok = true;
+      for (let i = 0; i < 40 && ok; i++) {
+        for (const memory of [false, true]) {
+          const h = AI.guessHidden(s, 1, memory);
+          ok = ok && Object.values(h.hands).every((cs) => !cs.some(isRedThree)) && !h.discardPile.some(isRedThree) &&
+            Object.entries(h.hands).every(([seat, cs]) => cs.length === s.players[seat].hand.length) &&
+            h.stock.length === s.stock.length && h.discardPile.length === s.discardPile.length;
+        }
+      }
+      check('Simulação nunca põe 3 vermelho na mão imaginada e mantém o número de cartas', ok);
+    }
+
+    // --- Ambiente de torneio (arena.js) ---
+    {
+      const d1 = Arena.deck(42).map((c) => c.id).join(',');
+      const d2 = Arena.deck(42).map((c) => c.id).join(',');
+      const d3 = Arena.deck(43).map((c) => c.id).join(',');
+      check('Torneio: a mesma semente dá o mesmo baralho; outra semente, outro', d1 === d2 && d1 !== d3);
+      const mk = () => {
+        const x = new Game({ allBots: true, deckSource: () => Arena.deck(7), dealer: 2 });
+        x.newMatch();
+        return x.players.map((p) => p.hand.map((c) => c.id).join(',')).join('|');
+      };
+      check('Torneio: mesma semente e carteador dão as mesmas mãos', mk() === mk());
+      const mirror = Arena.duplicate('moderado', 'moderado', 6, 100, 1);
+      check('Torneio duplicado: Moderado contra Moderado empata em toda distribuição', mirror.pairs.every((p) => p === 0),
+        mirror.pairs.join(','));
+      const vsRandom = Arena.summarize(Arena.duplicate('moderado', 'aleatorio', 20, 200, 1));
+      check('Torneio: Moderado vence o bot aleatório', vsRandom.diferencaPorRodada > 0, JSON.stringify(vsRandom.veredito));
+    }
+
+    // --- Registro público do que cada jogador fez ---
+    {
+      const o = new Game({ allBots: true });
+      o.newMatch();
+      o.discardPile = cards('9H');
+      const seat = o.current;
+      o.drawFromStock(seat);
+      const declined = o.observed[seat].some((e) => e.kind === 'decline' && e.card.rank === 9);
+      const card = o.players[seat].hand.find((c) => !isWild(c));
+      o.discard(seat, card.id);
+      const discarded = o.observed[seat].some((e) => e.kind === 'discard' && e.card === card);
+      check('Registro público: anota o topo recusado e o descarte', declined && discarded);
+      check('Registro público: a cópia para simulação começa sem registro', o.clone().observed.every((l) => !l.length));
+    }
+
+    // --- Mestre (mestre.js) ---
+    {
+      const set = (codes) => new Set(cards(codes).map((c) => `${c.rank}${c.suit}`));
+      check('Inferência: 7♥ 8♥ formam par com o 9♥', GM.hasPairFor(set('7H 8H'), 0, 0, cards('9H')[0]));
+      check('Inferência: 8♥ + curinga formam par com o 9♥', GM.hasPairFor(set('8H'), 1, 0, cards('9H')[0]));
+      check('Inferência: 4♣ 5♣ não formam par com o 9♥', !GM.hasPairFor(set('4C 5C'), 0, 0, cards('9H')[0]));
+      check('Inferência: dois Ases formam par com um Ás', GM.hasPairFor(set('AC AD'), 0, 2, cards('AH')[0]));
+
+      // Quem recusou o 9♥ com a dupla aberta provavelmente não tinha 7♥ 8♥: esse mundo pesa menos.
+      GM.resetParams();
+      const w = new Game({ allBots: true });
+      w.newMatch();
+      w.observed[1] = [{ kind: 'decline', card: cards('9H')[0], opened: true }];
+      const base = AI.guessHidden(w, 0, true);
+      const withPair = { ...base, hands: { ...base.hands, 1: cards('7H 8H 4C 5D 6S') } };
+      const without = { ...base, hands: { ...base.hands, 1: cards('4C 5D 6S 10C JD') } };
+      check('Inferência: mundo que contradiz uma recusa do lixo pesa menos',
+        GM.likelihood(w, 0, withPair) < GM.likelihood(w, 0, without));
+
+      // A corrida elimina cedo uma alternativa claramente pior e fica com a melhor.
+      GM.resetParams();
+      Object.assign(GM.PARAMS, { minWorlds: 8, batch: 8, budgetMs: 1e9 });
+      const r = new Game({ allBots: true });
+      r.newMatch();
+      r.drawFromStock(r.current);
+      const team = r.players[r.current].team;
+      const good = { label: 'boa' };
+      const bad = { label: 'ruim' };
+      const apply = (g2, s, c) => {
+        if (c === bad) g2.teams[1 - team].melds.push({ cards: cards('4S 5S 6S 7S 8S 9S 10S') }); // canastra de presente
+      };
+      const chosen = GM.race(r, r.current, [bad, good], apply, 200);
+      check('Monte Carlo adaptativo: escolhe a melhor e elimina a pior cedo',
+        chosen === good && GM.stats.eliminated === 1 && GM.stats.worlds < 200, `mundos: ${GM.stats.worlds}`);
+
+      // Uma rodada inteira: Mestre contra Moderado, sem erros e sem sumir carta.
+      GM.resetParams();
+      Object.assign(GM.PARAMS, { worldsDraw: 16, worldsMelds: 16, worldsDiscard: 16, minWorlds: 8 });
+      const full = new Game({ allBots: true });
+      full.newMatch();
+      let okRound = true;
+      let steps = 0;
+      try {
+        while ((full.phase === 'draw' || full.phase === 'play') && steps++ < 400) {
+          const s = full.current;
+          AI.playTurnSync(full, s, s % 2 === 0 ? 'mestre' : 'moderado');
+          if (full.countCards() !== 106) okRound = false;
+          if (full.phase !== 'roundEnd' && full.current === s) { okRound = false; break; }
+        }
+      } catch (e) {
+        okRound = false;
+      }
+      check('Mestre joga uma rodada inteira sem erros', okRound && full.phase === 'roundEnd');
+      GM.resetParams();
+    }
+
     g = setup('JH QH KH AH 10S JS QS KS 9D');
     check('Não pode ficar com 1 carta sem canastra limpa',
       !g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3), ids(g, 4, 5, 6, 7)] }).ok);
@@ -359,11 +468,11 @@
       r = await simulate(5, ['iniciante', 'iniciante', 'iniciante', 'iniciante']);
       check(`5 partidas com bots Iniciantes sem erros (${r.rounds} rodadas)`,
         r.errors.length === 0, r.errors.slice(0, 3).join(' | '));
-      // Estratégico e Mestre "imaginam" jogadas: aqui com poucas simulações, só para conferir que funcionam.
+      // Esperto e Mestre "imaginam" jogadas: aqui com poucas simulações, só para conferir que funcionam.
       const sim = { ...AI.SIM };
       AI.SIM.maxRounds = 2;
       AI.SIM.horizon = 4;
-      r = await simulate(1, ['mestre', 'estrategico', 'moderado', 'iniciante'], 3);
+      r = await simulate(1, ['mestre', 'esperto', 'moderado', 'iniciante'], 3);
       check(`3 rodadas com os 4 níveis juntos sem erros (${r.rounds} rodadas)`,
         r.errors.length === 0 && r.rounds >= 1, r.errors.slice(0, 3).join(' | '));
       Object.assign(AI.SIM, sim);

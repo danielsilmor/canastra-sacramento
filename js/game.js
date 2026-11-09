@@ -38,8 +38,14 @@ class Game {
     this.winner = null;
     this.quiet = false;     // true nas partidas "imaginadas" pelos bots: sem registro nem animação
     // Cartas que a mesa inteira viu entrar na mão de cada jogador (ao pegar o lixo).
-    // O bot Mestre usa isso para "decorar" o que cada um tem.
+    // O bot Mestre usa isso para "decorar" o que cada um pegou do lixo.
     this.publicIn = [new Set(), new Set(), new Set(), new Set()];
+    // O que cada jogador fez à vista de todos nesta rodada (descartes e topos do lixo que recusou).
+    // O Mestre usa isso para deduzir que cartas cada um provavelmente tem.
+    this.observed = [[], [], [], []];
+    // Só nos torneios de teste: baralho e carteador definidos (a mesma distribuição jogada duas vezes).
+    this.deckSource = options.deckSource || null;
+    this.firstDealer = options.dealer;
   }
 
   // ---------- Ajudantes ----------
@@ -57,7 +63,7 @@ class Game {
   }
 
   /*
-   * Cópia da partida para os bots "imaginarem" jogadas (Estratégico e Mestre).
+   * Cópia da partida para os bots "imaginarem" jogadas (Esperto e Mestre).
    * As cartas são as mesmas (não mudam); as listas são novas, então mexer na cópia
    * não muda nada na mesa de verdade. A cópia é "quieta": não gera registro nem animação.
    */
@@ -82,6 +88,8 @@ class Game {
     g.lastRound = null;
     g.quiet = true;
     g.publicIn = this.publicIn.map((s) => new Set(s));
+    g.observed = [[], [], [], []]; // as jogadas imaginadas não entram no registro da mesa
+    g.deckSource = null;
     return g;
   }
 
@@ -136,7 +144,7 @@ class Game {
     this.matchOver = false;
     this.winner = null;
     this.log = [];
-    this.dealer = Math.floor(Math.random() * 4);
+    this.dealer = this.firstDealer !== undefined ? this.firstDealer : Math.floor(Math.random() * 4);
     this.addLog(`Sorteio: ${this.players[this.dealer].name} é o carteador.`);
     this.startRound();
   }
@@ -150,10 +158,11 @@ class Game {
       t.vu = Rules.isVU(t.score);
       t.minOpen = Rules.openingMinimum(t.score);
     }
-    this.stock = shuffle(createDeck());
+    this.stock = this.deckSource ? this.deckSource(this.round) : shuffle(createDeck());
     this.discardPile = [];
     this.players.forEach((p) => (p.hand = []));
     this.publicIn = [new Set(), new Set(), new Set(), new Set()];
+    this.observed = [[], [], [], []];
     this.lastRound = null;
     this.addLog(`Rodada ${this.round}. Carteador: ${this.players[this.dealer].name}.`);
 
@@ -202,6 +211,11 @@ class Game {
     if (err) return err;
     if (!this.stock.length) return fail('O monte acabou. Pegue o lixo ou encerre a rodada.');
     const p = this.players[seat];
+    // Todos veem que o jogador preferiu o monte com esta carta disponível no topo do lixo.
+    const top = this.topDiscard;
+    if (!this.quiet && top && !this.isDiscardBlocked() && !isThree(top)) {
+      this.observed[seat].push({ kind: 'decline', card: top, opened: this.teamOf(seat).opened });
+    }
     const c = this.stock.pop();
     p.hand.push(c);
     this.addLog(p.isHuman ? `Você comprou ${cardName(c)} do monte.` : `${p.name} comprou do monte.`, seat);
@@ -230,6 +244,7 @@ class Game {
     if (idx < 0) return fail('Carta não encontrada.');
     const [rejected] = p.hand.splice(idx, 1);
     this.discardPile.push(rejected);
+    if (!this.quiet) this.observed[seat].push({ kind: 'discard', card: rejected });
     this.turn.canSecondDraw = false;
     const c = this.stock.pop();
     p.hand.push(c);
@@ -417,6 +432,7 @@ class Game {
     }
     const [c] = p.hand.splice(idx, 1);
     this.discardPile.push(c);
+    if (!this.quiet) this.observed[seat].push({ kind: 'discard', card: c });
     this.emit('discard', { seat, card: c });
     this.addLog(
       `${p.name} descartou ${cardName(c)}` +

@@ -12,11 +12,13 @@
  *                só fecha canastra com coringuinha se a dupla já tem uma limpa,
  *                não fica com menos de 3 cartas sem canastra limpa (senão fica "preso"),
  *                descarta cartas baixas e só solta o Ás em último caso.
- *   Estratégico  antes de comprar e de descartar, "imagina" várias continuações da rodada
+ *   Esperto       antes de comprar e de descartar, "imagina" várias continuações da rodada
  *                para cada opção e escolhe a que rende mais pontos. Do lixo, só conhece
  *                a carta de cima (não decora o resto).
- *   Mestre       como o Estratégico, mas decora o lixo inteiro e as cartas que cada
- *                jogador pegou do lixo, e por isso imagina as mãos dos outros com mais acerto.
+ *   Mestre       módulo próprio (mestre.js): decora o lixo e as cartas que cada jogador
+ *                pegou dele, deduz as cartas dos adversários pelo comportamento, compara
+ *                todas as opções com Monte Carlo adaptativo e só troca a jogada das regras
+ *                quando a vantagem é clara. Ver IA.md.
  * Todas as jogadas passam pelas mesmas regras do game.js que o jogador humano.
  * Nenhum bot vê a mão dos outros nem a ordem do monte: nas simulações,
  * as cartas escondidas são sorteadas entre as que ele não conhece.
@@ -27,8 +29,9 @@ const AI = {
     iniciante: { label: 'Iniciante', sim: false },
     moderado: { label: 'Moderado', sim: false },
     // rounds = quantos sorteios das cartas escondidas por decisão; budgetMs = tempo máximo para pensar.
-    estrategico: { label: 'Estratégico', sim: true, memory: false, rounds: 120, budgetMs: 700 },
-    mestre: { label: 'Mestre', sim: true, memory: true, rounds: 120, budgetMs: 1000 },
+    esperto: { label: 'Esperto', sim: true, memory: false, rounds: 120, budgetMs: 700 },
+    // Mestre: módulo próprio (mestre.js). Um nível com "hidden: true" não aparece nas configurações.
+    mestre: { label: 'Mestre', sim: true, memory: true, engine: 'gm' },
   },
   DEFAULT_LEVEL: 'moderado',
   // Simulação: cada sorteio é jogado "horizon" vezes à frente; "candidates" = quantos descartes comparar.
@@ -76,6 +79,10 @@ const AI = {
 
   // Os passos da vez. Cada "yield" é um ponto em que a tela pode mostrar o que aconteceu.
   *turnSteps(game, seat, level) {
+    if (AI.LEVELS[level] && AI.LEVELS[level].engine === 'gm') { // Mestre: decide pelo mestre.js
+      yield* GM.turnSteps(game, seat);
+      return;
+    }
     if (game.phase === 'draw') {
       const plan = AI.decideDraw(game, seat, level); // plano para pegar o lixo, ou null (monte)
       let took = false;
@@ -101,6 +108,10 @@ const AI = {
     if (game.players[seat].hand.length !== before) yield;
     if (game.phase !== 'play' || game.current !== seat) return; // bateu baixando
     const card = AI.decideDiscard(game, seat, level);
+    if (!card) { // mão vazia (não deveria acontecer): encerra a rodada para o jogo não travar
+      game.endRound(null);
+      return;
+    }
     game.discard(seat, card.id);
     yield;
   },
@@ -143,7 +154,7 @@ const AI = {
       AI.note(pickupText);
       return plan;
     }
-    // Estratégico e Mestre: imaginam as duas opções e ficam com a que rende mais.
+    // Esperto: imagina as duas opções e ficam com a que rende mais.
     const cands = [{ kind: 'stock', label: 'comprar do monte' }, { kind: 'pickup', plan, label: 'pegar o lixo' }];
     const best = AI.simulateBest(game, seat, level, cands);
     AI.note(`${AI.simSummary(cands)} Escolheu ${best.label}.` + (best.kind === 'pickup' ? ` ${pickupText}` : ''));
@@ -188,6 +199,7 @@ const AI = {
   // Descartar: escolhe a carta.
   decideDiscard(game, seat, level) {
     const hand = game.players[seat].hand;
+    if (!hand.length) return null; // sem cartas, não há o que descartar
     if (hand.length === 1) {
       AI.note(`Descartou ${cardName(hand[0])}, a última carta da mão.`);
       return hand[0];
@@ -214,7 +226,7 @@ const AI = {
       AI.note(AI.describeDiscard(ranked));
       return ranked[0].card;
     }
-    // Estratégico e Mestre: comparam os melhores descartes imaginando a continuação.
+    // Esperto: compara os melhores descartes imaginando a continuação.
     // Cartas iguais (as duas cópias do mesmo 4♠) dão o mesmo resultado: compara cada uma só uma vez.
     const seen = new Set();
     const distinct = ranked.filter((r) => {
@@ -762,7 +774,7 @@ const AI = {
     return false;
   },
 
-  // ---------- Simulação (Estratégico e Mestre) ----------
+  // ---------- Simulação (usada pelo Esperto e pelo Mestre) ----------
 
   /*
    * Compara opções "imaginando" o resto da rodada:
@@ -807,7 +819,7 @@ const AI = {
     const known = new Set(game.players[seat].hand.map((c) => c.id));
     const top = game.topDiscard;
     if (top) known.add(top.id);
-    const fixed = {}; // cartas que o bot sabe que estão na mão de cada um (Mestre)
+    const fixed = {}; // cartas que o bot sabe que estão na mão de cada um (com memória)
     if (memory) {
       game.discardPile.forEach((c) => known.add(c.id)); // decorou o lixo inteiro
       for (const p of game.players) {
@@ -817,7 +829,11 @@ const AI = {
       }
     }
     const everywhere = [...game.stock, ...game.discardPile, ...game.players.flatMap((p) => p.hand)];
-    const pool = shuffle(everywhere.filter((c) => !known.has(c.id)));
+    // 3 vermelhos nunca ficam na mão (são baixados assim que chegam) nem no lixo:
+    // os que ainda não apareceram estão no monte.
+    const unknown = everywhere.filter((c) => !known.has(c.id));
+    const redThrees = unknown.filter(isRedThree);
+    const pool = shuffle(unknown.filter((c) => !isRedThree(c)));
     const hands = {};
     for (const p of game.players) {
       if (p.seat === seat) continue;
@@ -827,7 +843,7 @@ const AI = {
     const discardPile = memory
       ? [...game.discardPile]
       : [...pool.splice(0, Math.max(0, game.discardPile.length - 1)), ...(top ? [top] : [])];
-    return { hands, discardPile, stock: pool };
+    return { hands, discardPile, stock: shuffle([...pool, ...redThrees]) };
   },
 
   // Uma cópia da partida com as cartas escondidas trocadas pelo sorteio.
@@ -854,7 +870,10 @@ const AI = {
     }
     if (g.phase !== 'play') return;
     AI.meldAll(g, seat, 'moderado');
-    if (g.phase === 'play' && g.current === seat) g.discard(seat, AI.decideDiscard(g, seat, 'moderado').id);
+    if (g.phase === 'play' && g.current === seat) {
+      const card = AI.decideDiscard(g, seat, 'moderado');
+      if (card) g.discard(seat, card.id);
+    }
   },
 
   // Joga algumas vezes à frente e devolve a vantagem da dupla "team" no placar imaginado.

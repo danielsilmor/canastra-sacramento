@@ -415,7 +415,7 @@ const UI = {
       if (!r.ok) return r;
       const newCards = [...g.turn.newIds].map((id) => cardName(this.cardById(id))).join(', ');
       let text = g.turn.canSecondDraw
-        ? `Você comprou ${newCards}. Como é o primeiro a jogar, se não quiser essa carta clique em "Trocar carta" (ela vai para o lixo).`
+        ? `Você comprou ${newCards}. Como é o primeiro a jogar, se não quiser essa carta clique em "Trocar carta" ou jogue a carta no lixo: ela vai para o lixo e você compra outra.`
         : `Você comprou ${newCards}. Baixe sequências, se quiser, e depois descarte 1 carta.`;
       if (first && (isThree(first) || isWild(first))) {
         const what = isThree(first) ? 'um 3' : isJoker(first) ? 'um coringão' : 'um 2';
@@ -686,8 +686,35 @@ const UI = {
     if (this.staging) return this.error('Complete a abertura ou clique em "Cancelar abertura" antes de descartar.');
     const ids = [...this.selected];
     if (ids.length !== 1) return this.error('Para descartar, selecione exatamente 1 carta e clique no lixo.');
+    // Primeiro a jogar, descartando a carta que acabou de comprar: oferece trocar por outra do monte.
+    if (g.turn.canSecondDraw && ids[0] === g.turn.firstCardId) return this.askSecondDraw(ids[0]);
     this.say('');
     this.perform(() => g.discard(0, ids[0]), '');
+  },
+
+  // Pergunta se o jogador quer trocar a carta comprada (e comprar outra) ou descartar e passar a vez.
+  askSecondDraw(cardId) {
+    const g = this.game;
+    const name = cardName(this.cardById(cardId));
+    this.showModal(`
+      <h2>Trocar de carta?</h2>
+      <p>Como você é o primeiro a jogar, pode recusar ${cardTagsHtml(name)} e comprar outra carta do monte.
+      A carta recusada vai para o lixo e a sua vez continua.</p>
+      <p>Se preferir, descarte ${cardTagsHtml(name)} normalmente: a sua vez termina.</p>
+      <div class="modal-actions">
+        <button class="btn-light" id="btn-sd-discard">Descartar e passar a vez</button>
+        <button class="btn-primary" id="btn-sd-swap">Trocar e comprar outra</button>
+      </div>`, true);
+    $('btn-sd-swap').onclick = () => {
+      this.hideModal();
+      this.onSecondDraw();
+    };
+    $('btn-sd-discard').onclick = () => {
+      this.hideModal();
+      if (!this.canAct() || g.phase !== 'play') return;
+      this.say('');
+      this.perform(() => g.discard(0, cardId), '');
+    };
   },
 
   // ---------- Arrastar e soltar ----------

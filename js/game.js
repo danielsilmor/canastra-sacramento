@@ -372,7 +372,7 @@ class Game {
       this.phase = 'play';
       const fromHand = topMeld.filter((c) => c !== top).map(cardName).join(', ');
       this.addLog(
-        `${p.name} pegou o lixo (${pile.length + 1} cartas): juntou ${cardName(top)} do topo com ${fromHand} da mão.`,
+        `${p.name} pegou o lixo (${pile.length + 1} carta${pile.length ? 's' : ''}): juntou ${cardName(top)} do topo com ${fromHand} da mão.`,
         seat
       );
       this.emit('pickup', { seat, top, pile });

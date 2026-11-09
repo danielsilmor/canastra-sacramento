@@ -95,7 +95,7 @@ Nenhum bot trapaceia: nenhum vê a sua mão, a mão dos outros ou a ordem do mon
 
 - **Só o coringuinha (2) deixa a sequência suja.** Sequência ou canastra com coringão continua **limpa** (500). Esta regra muda o que está escrito no PDF, que considera suja a sequência com qualquer curinga.
 - **Coringuinha (2) e coringão também travam o lixo**: descartados, o próximo jogador não pode pegar o lixo, igual ao 3 preto.
-- Na 1ª compra da rodada, a carta recusada **vai para o lixo**. Se a carta comprada for um **3** (preto ou vermelho) ou um curinga (**coringuinha (2)** ou **coringão**), não dá para trocar.
+- Na 1ª compra da rodada, a carta recusada **vai para o lixo**. Para trocar, clique em "Trocar carta" ou jogue a carta comprada no lixo (arrastando ou clicando nele): o jogo pergunta se você quer trocar e comprar outra ou descartar e passar a vez. Se a carta comprada for um **3** (preto ou vermelho) ou um curinga (**coringuinha (2)** ou **coringão**), não dá para trocar.
 - Para pegar o lixo, a carta do topo e **pelo menos 2 cartas da mão** precisam formar uma sequência entre si. Esse trio pode virar um **jogo novo** ou ser **encaixado num jogo que a dupla já baixou** (por exemplo: jogo 4♠ 5♠ 6♠ na mesa, topo 7♠, mão 8♠ 9♠ → o jogo vira 4♠ a 9♠). Não vale encaixar só o topo, sem as 2 cartas da mão. Vale para você e para os computadores.
 - O curinga também pode entrar na sequência de Ases (máximo de 1 por sequência).
 - O curinga numa sequência se ajusta sozinho: ele tapa o buraco ou vai para a ponta.

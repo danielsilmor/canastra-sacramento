@@ -3,7 +3,11 @@
  *
  * Quatro níveis de inteligência (escolhidos na engrenagem, para cada bot):
  *   Iniciante    joga com bom senso, mas comete alguns erros de propósito.
- *   Moderado     prefere aumentar os jogos da mesa a baixar várias sequências pequenas,
+ *   Moderado     abre gastando o mínimo de curingas (compara várias montagens),
+ *                conta as cartas já presas em jogos na mesa para saber a chance de canastra
+ *                de cada jogo (não põe curinga em jogo fraco; carta vai para o jogo mais promissor),
+ *                não baixa sequência que disputa cartas com outra do mesmo naipe já na mesa,
+ *                prefere aumentar os jogos da mesa a baixar várias sequências pequenas,
  *                guarda o coringão para fechar canastra (não começa jogo novo com ele),
  *                só fecha canastra com coringuinha se a dupla já tem uma limpa,
  *                não fica com menos de 3 cartas sem canastra limpa (senão fica "preso"),
@@ -204,13 +208,19 @@ const AI = {
   },
 
   // Procura sequências possíveis na mão (sem repetir cartas entre elas).
-  findMelds(cards, allowDirty) {
+  // "acesFirst": junta os Ases numa sequência de Ases antes de montar as sequências dos naipes
+  // (senão, um Ás pode ir para a ponta de Q K A e faltar Ás para a sequência de Ases).
+  findMelds(cards, allowDirty, acesFirst = false) {
     const used = new Set();
     const melds = [];
     const take = (meld) => {
       melds.push(meld);
       meld.forEach((c) => used.add(c.id));
     };
+    if (acesFirst) {
+      const allAces = cards.filter((c) => c.rank === 14);
+      if (allAces.length >= 3) take(allAces);
+    }
     // 1) Sequências limpas (repete enquanto achar, por causa das cartas duplicadas).
     let found = true;
     while (found) {
@@ -297,11 +307,128 @@ const AI = {
     return null;
   },
 
+  // ---------- Chance de canastra ----------
+
+  // Quantas cópias de cada carta (sem curingas) já estão em jogos: os da mesa, das duas duplas,
+  // mais "extra" (jogos que o bot está pensando em baixar). Chave: valor + naipe, ex.: "14D".
+  tableCounts(game, extra = []) {
+    const counts = new Map();
+    const add = (c) => {
+      if (isWild(c)) return;
+      const k = `${c.rank}${c.suit}`;
+      counts.set(k, (counts.get(k) || 0) + 1);
+    };
+    game.teams.forEach((t) => t.melds.forEach((m) => m.cards.forEach(add)));
+    extra.forEach((m) => m.forEach(add));
+    return counts;
+  },
+
+  /*
+   * Até quantas cartas um jogo ainda pode chegar, contando só as cartas que não estão
+   * presas em outros jogos (cada carta existe 2 vezes; há 8 Ases). "counts" já inclui
+   * as cartas do próprio jogo. Uma canastra precisa de 7: abaixo de 8, o jogo é "fraco"
+   * (depende de quase todas as cartas que sobraram).
+   */
+  reach(cards, counts) {
+    const naturals = cards.filter((c) => !isWild(c));
+    const wildSlot = 1; // o jogo tem (ou ainda pode ganhar) 1 curinga
+    if (!naturals.length) return cards.length;
+    if (naturals.every((c) => c.rank === 14)) {
+      let acesOnTable = 0;
+      for (const s of SUITS) acesOnTable += counts.get(`14${s}`) || 0;
+      const elsewhere = acesOnTable - naturals.length;
+      return 8 - elsewhere + wildSlot;
+    }
+    const suit = naturals[0].suit;
+    const ranks = naturals.map((c) => c.rank);
+    const lo = Math.min(...ranks);
+    const hi = Math.max(...ranks);
+    const free = (r) => 2 - (counts.get(`${r}${suit}`) || 0) > 0;
+    let below = 0;
+    for (let r = lo - 1; r >= 4 && free(r); r--) below++;
+    let above = 0;
+    for (let r = hi + 1; r <= 14 && free(r); r++) above++;
+    const hasWild = cards.some(isWild);
+    return Math.min(11, cards.length + below + above + (hasWild ? 0 : wildSlot));
+  },
+
+  // Jogo com pouca chance de virar canastra?
+  isWeak(cards, counts) {
+    return AI.reach(cards, counts) < 8;
+  },
+
+  /*
+   * A sequência "cards" compete com alguma sequência do mesmo naipe em "melds"?
+   * Compete quando falta só 1 ou 2 cartas entre as duas (ex.: 4♥ 5♥ 6♥ e 9♥ 10♥ J♥ Q♥).
+   * Na mesa os jogos não se juntam: as duas passam a disputar as mesmas cartas (7♥, 8♥)
+   * e nenhuma chega fácil a canastra. Melhor guardar as cartas para aumentar a que já existe.
+   */
+  competesWithRun(melds, cards) {
+    const span = (cs) => {
+      const n = cs.filter((c) => !isWild(c));
+      if (!n.length || n.every((c) => c.rank === 14)) return null; // sequência de Ases não é de naipe
+      const ranks = n.map((c) => c.rank);
+      return { suit: n[0].suit, lo: Math.min(...ranks), hi: Math.max(...ranks) };
+    };
+    const a = span(cards);
+    if (!a) return false;
+    return melds.some((m) => {
+      const b = span(m);
+      if (!b || b.suit !== a.suit) return false;
+      const gap = a.hi < b.lo ? b.lo - a.hi - 1 : b.hi < a.lo ? a.lo - b.hi - 1 : -1;
+      return gap >= 1 && gap <= 2;
+    });
+  },
+
+  /*
+   * Moderado em diante: escolhe a melhor abertura entre várias montagens
+   * (sequências dos naipes primeiro ou Ases primeiro, com e sem curinga).
+   * Entre as que atingem o mínimo, fica com a que gasta menos curingas (o coringão vale mais
+   * que o 2), sem curinga em jogo fraco; empate: a que soma mais pontos.
+   */
+  bestOpening(game, seat) {
+    const hand = game.players[seat].hand;
+    const team = game.teamOf(seat);
+    const candidates = [];
+    const seen = new Set();
+    for (const acesFirst of [false, true]) {
+      for (const allowDirty of [false, true]) {
+        const set = AI.findMelds(hand, allowDirty, acesFirst);
+        // Todas as combinações de jogos desse conjunto (no máximo 2^8).
+        const n = Math.min(set.length, 8);
+        for (let mask = 1; mask < (1 << n); mask++) {
+          const melds = set.filter((m, i) => mask & (1 << i));
+          if (!Rules.opensGame(melds, team.minOpen)) continue;
+          const key = melds.map((m) => m.map((c) => c.id).sort().join(',')).sort().join('|');
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const counts = AI.tableCounts(game, melds);
+          let cost = 0;
+          melds.forEach((m, i) => {
+            cost += m.filter(isJoker).length * 3 + m.filter(isDirtyWild).length * 2;
+            if (m.some(isWild) && AI.isWeak(m, counts)) cost += 4;
+            // Duas sequências do mesmo naipe que vão disputar as mesmas cartas.
+            if (AI.competesWithRun(melds.slice(i + 1), m)) cost += 2;
+          });
+          candidates.push({ melds, cost, points: melds.reduce((s, m) => s + Rules.pointsOf(m), 0) });
+        }
+      }
+    }
+    return candidates.sort((a, b) => a.cost - b.cost || b.points - a.points);
+  },
+
   // Tenta abrir o jogo da dupla com as sequências da mão.
   tryOpen(game, seat, level) {
     const p = game.players[seat];
     const team = game.teamOf(seat);
     const smart = level !== 'iniciante';
+    if (smart) {
+      for (const cand of AI.bestOpening(game, seat)) {
+        const plan = { newMelds: cand.melds.map((m) => m.map((c) => c.id)) };
+        if (!AI.wouldStrand(game, seat, plan) && game.applyMelds(seat, plan).ok) return true;
+      }
+      return false;
+    }
     for (const allowDirty of [false, true]) {
       const melds = AI.findMelds(p.hand, allowDirty).sort(
         (a, b) => Rules.pointsOf(b) - Rules.pointsOf(a)
@@ -361,9 +488,22 @@ const AI = {
     const smart = level !== 'iniciante';
     const late = game.stock.length <= 8; // monte acabando: vale baixar o que der (cartas na mão contam contra)
     const tryPlan = (plan) => !(smart && AI.wouldStrand(game, seat, plan)) && game.applyMelds(seat, plan).ok;
-    const order = team.melds.map((m, i) => i).sort((a, b) => team.melds[b].cards.length - team.melds[a].cards.length);
+    const counts = AI.tableCounts(game);
+    // Ordem dos jogos da dupla. Iniciante: os maiores primeiro. Do Moderado em diante: primeiro
+    // os que ainda não são canastra e têm chance de virar (os maiores e limpos antes),
+    // depois as canastras prontas e, por último, os jogos fracos (pouca chance de canastra).
+    const meldScore = (cards) => {
+      if (!smart) return cards.length;
+      let s = cards.length - (Rules.isDirty(cards) ? 0.5 : 0);
+      if (Rules.isCanastra(cards)) s -= 50;
+      else if (AI.isWeak(cards, counts)) s -= 100;
+      return s;
+    };
+    const order = team.melds.map((m, i) => i)
+      .sort((a, b) => meldScore(team.melds[b].cards) - meldScore(team.melds[a].cards));
 
-    // 1) Acrescentar cartas naturais aos jogos da dupla (prioriza os maiores).
+    // 1) Acrescentar cartas naturais aos jogos da dupla (na ordem acima: uma carta que encaixa
+    //    em dois jogos vai para o que está mais perto de virar canastra).
     for (const c of p.hand) {
       if (isWild(c) || isThree(c)) continue;
       for (const i of order) {
@@ -385,8 +525,14 @@ const AI = {
             tryPlan({ additions: [{ meldIndex: i, ids: [wild.id] }] })) return true;
       }
     }
+    // Do Moderado em diante: não baixa sequência nova que vai disputar cartas com outra
+    // do mesmo naipe que a dupla já tem na mesa (e ainda não é canastra), salvo no fim do monte.
+    const growing = team.melds.filter((m) => !Rules.isCanastra(m.cards)).map((m) => m.cards);
+    const competes = (m) => smart && !late && AI.competesWithRun(growing, m);
+
     // 3) Sequências novas limpas.
     for (const m of AI.findMelds(p.hand, false)) {
+      if (competes(m)) continue;
       if (smart && AI.keepInHand(game, seat, m, hasClean)) continue;
       if (tryPlan({ newMelds: [m.map((c) => c.id)] })) return true;
     }
@@ -398,6 +544,9 @@ const AI = {
       if (!m.some(isWild)) continue;
       if (Rules.isDirty(m) && !(hasClean || p.hand.length >= 9)) continue;
       if (smart && !(late || hasClean || p.hand.length >= 12)) continue;
+      // Curinga em jogo fraco (pouca chance de canastra) é desperdício, salvo no fim do monte.
+      if (smart && !late && AI.isWeak(m, AI.tableCounts(game, [m]))) continue;
+      if (competes(m)) continue;
       if (smart && AI.keepInHand(game, seat, m, hasClean)) continue;
       if (tryPlan({ newMelds: [m.map((c) => c.id)] })) return true;
     }

@@ -160,6 +160,39 @@
     check('6 cartas (não é canastra) com 45 pontos não abre',
       !g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3, 4, 5)] }).ok);
 
+    // --- Bots: abertura e chance de canastra ---
+    {
+      // A mão da Kátia: com Q♣ K♣ A♣ dos adversários na mesa.
+      const k = setup('JD QD KD AD AD AC QS KS 2S JK 5H 8C');
+      k.teams[1].melds = [{ cards: cards('QC KC AC') }];
+      k.teams[1].opened = true;
+      const opened = AI.tryOpen(k, 0, 'moderado');
+      const shown = k.teams[0].melds.map((m) => m.cards.map(cardName).join(' ')).join(' | ');
+      check('Bot abre sem gastar o coringão quando dá', opened && k.players[0].hand.some(isJoker), shown);
+      check('Bot junta os Ases numa sequência de Ases limpa na abertura',
+        k.teams[0].melds.some((m) => m.cards.length >= 3 && m.cards.every((c) => c.rank === 14)), shown);
+      // Sequência de Ases com 2 Ases já presos em outros jogos tem pouca chance de canastra.
+      const weak = cards('AC AD JK');
+      const counts = AI.tableCounts(k, [weak, cards('JD QD KD AD'), cards('QC KC AC')]);
+      check('Sequência de Ases com poucos Ases sobrando é considerada fraca', AI.isWeak(weak, counts));
+      check('Sequência com muitas cartas livres não é fraca', !AI.isWeak(cards('4H 5H 6H'), AI.tableCounts(k, [cards('4H 5H 6H')])));
+    }
+    {
+      // A Kátia baixou 4♥ 5♥ 6♥ com 9♥ 10♥ J♥ Q♥ da dupla na mesa: as duas disputam 7♥ e 8♥.
+      const h = setup('4H 5H 6H KS 2C 7D 9C QC 5D JS');
+      h.teams[0].melds = [{ cards: cards('9H 10H JH QH') }];
+      h.teams[0].opened = true;
+      AI.meldAll(h, 0, 'moderado');
+      const shown = h.teams[0].melds.map((m) => m.cards.map(cardName).join(' ')).join(' | ');
+      check('Bot guarda 4♥ 5♥ 6♥ em vez de disputar cartas com 9♥ 10♥ J♥ Q♥', h.teams[0].melds.length === 1, shown);
+      // Quando chegam o 7♥ e o 8♥, tudo vai para a sequência que já existe.
+      h.players[0].hand.push(...cards('7H 8H'));
+      AI.meldAll(h, 0, 'moderado');
+      const run = h.teams[0].melds[0].cards;
+      check('Com 7♥ e 8♥, as cartas guardadas aumentam a sequência de copas',
+        h.teams[0].melds.length === 1 && run.length === 9, h.teams[0].melds.map((m) => m.cards.map(cardName).join(' ')).join(' | '));
+    }
+
     g = setup('JH QH KH AH 10S JS QS KS 9D');
     check('Não pode ficar com 1 carta sem canastra limpa',
       !g.applyMelds(0, { newMelds: [ids(g, 0, 1, 2, 3), ids(g, 4, 5, 6, 7)] }).ok);

@@ -112,33 +112,87 @@ const Rules = {
 
   /*
    * Todas as formas diferentes de separar as cartas em sequências válidas.
-   * Exemplo: K♥ A♥ Q♦ K♦ + coringão + 2♥ dá 2 opções:
-   *   [K♥ A♥ coringão] e [Q♦ K♦ 2♥]   ou   [K♥ A♥ 2♥] e [Q♦ K♦ coringão]
-   * Curingas do mesmo tipo (dois 2 de naipes diferentes) contam como iguais,
-   * porque trocá-los de lugar não muda nada no jogo.
+   * Cada carta natural pode ir para qualquer sequência em que caiba (cada Ás pode ficar
+   * na ponta da sequência do seu naipe ou numa sequência de Ases) e cada curinga
+   * pode ir para qualquer sequência (no máximo 1 por sequência).
+   * Exemplo: 10♦ J♦ Q♦ K♦ A♦ A♣ A♣ J♣ K♣ + dois 2 dá, entre outras:
+   *   [10♦ J♦ Q♦ K♦ A♦] [A♣ A♣ 2] [J♣ 2 K♣]   ou   [10♦ J♦ Q♦ K♦] [A♦ A♣ 2] [J♣ 2 K♣ A♣] ...
+   * Não repete opções iguais: cartas iguais (dois A♣) e curingas do mesmo tipo
+   * trocados de lugar contam como a mesma opção. Também não oferece separar em duas
+   * uma sequência que poderia ficar inteira (ex.: 4♥ 5♥ 6♥ | 7♥ 8♥ 9♥).
+   * As opções vêm ordenadas: menos sequências sujas primeiro, depois a maior sequência.
    */
   splitOptions(cards) {
     if (cards.some(isThree)) return [];
     const wilds = cards.filter(isWild);
-    const naturals = cards.filter((c) => !isWild(c));
+    const naturals = cards.filter((c) => !isWild(c))
+      .sort((a, b) => a.suit.localeCompare(b.suit) || a.rank - b.rank);
+    if (!naturals.length) return [];
+    const maxGap = wilds.length ? 1 : 0; // cada sequência pode ter no máximo 1 buraco (tapado por 1 curinga)
+    const groups = []; // { kind: 'run' (mesmo naipe) | 'aces', suit, cards, gaps }
     const options = [];
     const seen = new Set();
-    // Ases junto com o naipe (ex.: Q K A) ou Ases num grupo próprio.
-    for (const acesApart of [false, true]) {
-      const groups = new Map();
-      for (const c of naturals) {
-        const key = acesApart && c.rank === 14 ? 'A' : c.suit;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(c);
-      }
-      for (const melds of this.wildPlacements([...groups.values()], wilds)) {
+    let budget = 200000; // trava de segurança: seleções enormes não travam a tela
+
+    // A carta "c" pode entrar no grupo "g"? (as cartas chegam em ordem de naipe e valor)
+    const gapIfFits = (g, c) => {
+      if (g.kind === 'aces') return c.rank === 14 ? 0 : -1;
+      if (c.suit !== g.suit) return -1;
+      const last = g.cards[g.cards.length - 1];
+      if (c.rank === last.rank) return -1; // não repete carta na sequência
+      const gap = c.rank - last.rank - 1;
+      return gap + g.gaps <= maxGap ? gap : -1;
+    };
+
+    const finish = () => {
+      if (groups.some((g) => g.cards.length < 2) || wilds.length > groups.length) return;
+      for (const melds of this.wildPlacements(groups.map((g) => g.cards), wilds)) {
+        // Separar em duas uma sequência que caberia inteira não é uma opção de verdade.
+        let mergeable = false;
+        for (let i = 0; i < melds.length && !mergeable; i++) {
+          for (let j = i + 1; j < melds.length && !mergeable; j++) {
+            mergeable = this.analyzeMeld([...melds[i], ...melds[j]]).ok;
+          }
+        }
+        if (mergeable) continue;
         const key = this.splitKey(melds);
         if (seen.has(key)) continue;
         seen.add(key);
         options.push(melds);
       }
-    }
-    return options;
+    };
+
+    const place = (i) => {
+      if (--budget < 0) return;
+      if (i === naturals.length) return finish();
+      const c = naturals[i];
+      // Grupo de 1 carta que não pode mais crescer nunca vai virar sequência: desiste deste caminho.
+      // (as próximas cartas têm naipe "maior" ou valor maior, então se esta já está longe, as outras também)
+      for (const g of groups) {
+        if (g.cards.length >= 2 || g.kind !== 'run') continue;
+        const last = g.cards[g.cards.length - 1];
+        if (c.suit !== g.suit || c.rank - last.rank - 1 + g.gaps > maxGap) return;
+      }
+      // Entra num grupo que já existe...
+      for (const g of groups) {
+        const gap = gapIfFits(g, c);
+        if (gap < 0) continue;
+        g.cards.push(c);
+        g.gaps += gap;
+        place(i + 1);
+        g.cards.pop();
+        g.gaps -= gap;
+      }
+      // ...ou começa um grupo novo (um Ás começa uma sequência de Ases; os outros, uma sequência do naipe).
+      groups.push({ kind: c.rank === 14 ? 'aces' : 'run', suit: c.suit, cards: [c], gaps: 0 });
+      place(i + 1);
+      groups.pop();
+    };
+    place(0);
+
+    const dirtyCount = (melds) => melds.filter((m) => this.isDirty(m)).length;
+    const longest = (melds) => Math.max(...melds.map((m) => m.length));
+    return options.sort((x, y) => dirtyCount(x) - dirtyCount(y) || longest(y) - longest(x));
   },
 
   // Todas as formas de colocar cada curinga num grupo diferente (no máximo 1 por grupo)
@@ -166,7 +220,8 @@ const Rules = {
 
   // "Impressão digital" de uma separação, para não repetir opções iguais.
   splitKey(melds) {
-    const cardKey = (c) => (isJoker(c) ? 'JK' : isWild(c) ? 'W2' : String(c.id));
+    // Cartas iguais (ex.: os dois A♣ dos dois baralhos) contam como a mesma carta.
+    const cardKey = (c) => (isJoker(c) ? 'JK' : isWild(c) ? 'W2' : `${c.rank}${c.suit}`);
     return melds.map((m) => m.map(cardKey).sort().join(',')).sort().join('|');
   },
 

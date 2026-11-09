@@ -1388,7 +1388,7 @@ const UI = {
     if (options.length === 1) return onPick(options[0]);
     this.showModal(`
       <h2>Como você quer montar?</h2>
-      <p>Essas cartas formam sequências de mais de um jeito. Veja onde fica cada curinga (contorno amarelo) e escolha uma opção.</p>
+      <p>Essas cartas formam sequências de ${options.length} jeitos diferentes: muda onde fica cada curinga (contorno amarelo) ou cada carta, como um Ás na ponta da sequência do naipe ou numa sequência de Ases. Escolha uma opção.</p>
       <div class="arrangements" id="arrangements"></div>
       <div class="modal-actions"><button class="btn-light" id="btn-arr-cancel">Cancelar</button></div>`, true);
     const list = $('arrangements');

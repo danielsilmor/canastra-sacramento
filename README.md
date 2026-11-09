@@ -58,9 +58,11 @@ que o mínimo, então abre o jogo sozinha, mesmo somando menos de 80 em cartas. 
 - **Devolver uma carta só:** sem nenhuma carta selecionada, clique numa carta de um jogo do quadro amarelo para ela voltar para a mão (se o jogo continuar válido sem ela).
 - **Cancelar abertura** devolve tudo de uma vez.
 
-**Escolher onde ficam os curingas:** quando as cartas selecionadas podem ser montadas de mais de um jeito
-(por exemplo, K♥ A♥ Q♦ K♦ + coringão + coringuinha), ao baixar ou pegar o lixo aparece a janela
-**"Como você quer montar?"** com as opções desenhadas: os curingas ficam com contorno amarelo e cada jogo mostra se fica limpo ou sujo. Clique na opção que quiser.
+**Escolher como montar:** quando as cartas selecionadas podem ser montadas de mais de um jeito, ao baixar ou pegar o lixo
+aparece a janela **"Como você quer montar?"** com **todas** as montagens possíveis desenhadas. Muda onde fica cada curinga
+(contorno amarelo) e cada carta: por exemplo, um Ás pode ficar na ponta da sequência do seu naipe (10♦ J♦ Q♦ K♦ A♦)
+ou numa sequência de Ases (A♦ A♣ A♣). Cada jogo mostra se fica limpo ou sujo. Clique na opção que quiser.
+O jogo não oferece quebrar à toa uma sequência que caberia inteira.
 
 O botão **Regras** mostra um resumo das regras.
 

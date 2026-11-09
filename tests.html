@@ -91,6 +91,21 @@
     check('Coringão que cabe em qualquer das duas sequências: 2 opções', opts('4H 5H 6H 8C 9C 10C JK').length === 2);
     check('Sequências sem curinga: 1 opção', opts('4H 5H 6H 8C 9C 10C').length === 1);
     check('Uma sequência só: 1 opção', opts('7S 8S JK').length === 1);
+    // Cada Ás pode ficar na ponta da sequência do naipe ou na sequência de Ases.
+    {
+      const o = opts('10D JD QD KD AD AC AC JC KC 2S 2S');
+      const has = (want) => o.some((melds) => show(melds) === want);
+      check('Ás de ouros na ponta da sequência de ouros é uma opção',
+        has('10♦ J♦ Q♦ K♦ A♦ | A♣ A♣ 2♠ | J♣ 2♠ K♣'), o.map(show).join(' || '));
+      check('Ás de paus na ponta da sequência de paus é uma opção',
+        has('10♦ J♦ Q♦ K♦ | A♦ A♣ 2♠ | J♣ 2♠ K♣ A♣') || has('10♦ J♦ Q♦ K♦ | A♣ A♦ 2♠ | J♣ 2♠ K♣ A♣'),
+        o.map(show).join(' || '));
+      check('As montagens antigas continuam como opção', o.length >= 4, `${o.length} opções`);
+    }
+    check('Carta repetida separa em duas sequências do mesmo naipe', opts('5H 6H 7H 7H 8H 9H').length === 1 &&
+      show(opts('5H 6H 7H 7H 8H 9H')[0]) === '5♥ 6♥ 7♥ | 7♥ 8♥ 9♥', show(opts('5H 6H 7H 7H 8H 9H')[0]));
+    check('Não oferece quebrar à toa uma sequência que cabe inteira', opts('4H 5H 6H 7H 8H 9H AC AD AS').length === 1,
+      opts('4H 5H 6H 7H 8H 9H AC AD AS').map(show).join(' || '));
 
     // --- Pontuação ---
     const t1 = { melds: [{ cards: cards('4H 5H 6H 7H 8H 9H 10H') }], redThrees: cards('3H 3D') };

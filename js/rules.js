@@ -225,12 +225,6 @@ const Rules = {
     return melds.map((m) => m.map(cardKey).sort().join(',')).sort().join('|');
   },
 
-  // Uma sequência só, se der; senão tenta separar em várias. Retorna lista de sequências ou null.
-  meldsFrom(cards) {
-    const options = this.meldOptions(cards);
-    return options.length ? options[0] : null;
-  },
-
   // Todas as montagens possíveis: uma sequência só (se der) ou as separações em várias.
   meldOptions(cards) {
     const a = this.analyzeMeld(cards);

@@ -32,7 +32,6 @@ class Game {
     this.discardPile = [];  // lixo
     this.log = [];
     this.events = [];       // lista do que aconteceu (usada pela tela para animar)
-    this.history = [];
     this.phase = 'idle';    // 'draw' (precisa comprar) | 'play' (baixar/descartar) | 'roundEnd'
     this.round = 0;
     this.matchOver = false;
@@ -72,7 +71,6 @@ class Game {
     g.discardPile = [...this.discardPile];
     g.log = [];
     g.events = [];
-    g.history = [];
     g.phase = this.phase;
     g.round = this.round;
     g.matchOver = this.matchOver;
@@ -137,7 +135,6 @@ class Game {
     this.round = 0;
     this.matchOver = false;
     this.winner = null;
-    this.history = [];
     this.log = [];
     this.dealer = Math.floor(Math.random() * 4);
     this.addLog(`Sorteio: ${this.players[this.dealer].name} é o carteador.`);
@@ -478,7 +475,6 @@ class Game {
       return r;
     });
     this.lastRound = { round: this.round, batedor, results };
-    this.history.push(this.lastRound);
 
     const [a, b] = this.teams.map((t) => t.score);
     if (a >= Rules.TARGET || b >= Rules.TARGET) {

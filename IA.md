@@ -251,6 +251,9 @@ erros e sem sumir carta; partidas inteiras com todos os níveis juntos.
 | Ajustes de descarte (carta repetida, cartas altas no começo, 3 preto depois) | neutros a levemente negativos (9.000 rodadas) | descartados |
 | Mestre: todas as alternativas + corrida com eliminação + preferência pela regra + inferência | **+60 ± 41** | mantido |
 | Busca nas baixadas | sem ganho | implementada, desligada |
+| Adiar a abertura para pegar um lixo grande (monte com 25+, adversários sem abrir, abertura sem canastra, máx. 2 vezes): rigorosa (lixo 5+, 3 pares na mão) e solta (lixo 3+, 2 pares) | −53 ± 56 e −29 ± 62 (640 rodadas cada); adiou em 4% e 9% das rodadas e, quando adiou, abriu pegando o lixo em cerca de metade das vezes | descartado: não compensa |
+| Descer mais cedo (baixar logo as sequências de 3 cartas) | +7 ± 62 (640 rodadas) | descartado (empate) |
+| Segurar mais (guardar também as sequências de 4 cartas) | +16 ± 60 (640 rodadas) | descartado (empate) |
 | **Aprendizado de máquina** | não usado | regras ainda mudando; busca com inferência é mais barata, mede-se bem e explica as decisões |
 
 **Por que "preferir a regra"?** Com poucas centenas de simulações, a média de cada opção tem ruído; escolher
@@ -259,6 +262,10 @@ vantagem de pelo menos 1 erro-padrão para sair da escolha das regras foi o que 
 
 **Por que simular só 8 jogadas?** Nas simulações todos jogam como Moderado; quanto mais longe, mais o jogo
 imaginado se afasta do real. Testado: ir até o fim da rodada piorou o bot.
+
+**Quando abrir e quando descer?** O Mestre abre assim que consegue (com a montagem que gasta menos curingas)
+e, depois de abrir, guarda só as sequências de 3 cartas. Os testes de abrir mais tarde, descer mais cedo e
+segurar mais deram empate ou pior: o jeito atual já está tão bom quanto as alternativas.
 
 ## 5. Limitações e oportunidades
 

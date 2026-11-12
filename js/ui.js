@@ -117,6 +117,7 @@ const UI = {
     };
     $('btn-rules').onclick = () => this.showRules();
     $('btn-log-toggle').onclick = () => this.setLogCollapsed(!this.logCollapsed);
+    $('btn-log-download').onclick = () => this.downloadHistory();
     let collapsed = false;
     try { collapsed = localStorage.getItem('canastra-log-collapsed') === '1'; } catch (e) { /* sem armazenamento */ }
     this.setLogCollapsed(collapsed);
@@ -141,6 +142,7 @@ const UI = {
     this.busy = false;
     const c = this.characters; // os mesmos personagens a cada nova partida
     this.game = new Game({ names: ['Você', c[1].name, c[2].name, c[3].name] });
+    Historico.iniciar(this.game, this.levels); // grava cada jogada (para conferir depois)
     this.eventCursor = 0;
     this.logCursor = 0;
     this.game.newMatch();
@@ -923,6 +925,7 @@ const UI = {
       while ((g.phase === 'draw' || g.phase === 'play') && !g.players[g.current].isHuman) {
         const seat = g.current;
         this.actorSeat = seat;
+        this.actorTurn = Historico.numeroDa(g);
         turnLines = [];
         this.narration = { text: `${g.players[seat].name} está pensando…`, waiting: false, actor: seat };
         this.render();
@@ -930,10 +933,12 @@ const UI = {
         if (token !== this.token) throw CANCELLED;
         snap = this.snapshot();
         const before = g.events.length + g.log.length;
-        await AI.takeTurn(g, seat, pause, this.levels[seat], this.debug);
+        await AI.takeTurn(g, seat, pause, this.levels[seat], true);
         if (g.events.length !== this.eventCursor || g.log.length !== this.logCursor) await pause();
         if (before === g.events.length + g.log.length) throw new Error('o computador não conseguiu jogar');
-        // Modo depuração: os motivos da jogada vão para o quadro da jogada e para o histórico.
+        // Os motivos da jogada ficam sempre gravados no histórico da partida (para conferir depois).
+        Historico.anotarPorque(seat, AI.lastTrace);
+        // Modo depuração: os motivos também aparecem no quadro da jogada e no histórico da tela.
         const why = this.debug ? [...AI.lastTrace] : [];
         if (why.length) {
           g.log.push({ text: `Por quê? (${g.players[seat].name})`, seat, why });
@@ -1228,7 +1233,7 @@ const UI = {
       label = `Rodada ${g.round}`;
       who = 'Distribuindo';
     } else if (this.narration && this.narration.actor != null) {
-      label = 'Jogada de';
+      label = `Jogada ${this.actorTurn} de`;
       who = this.avatarHtml(this.narration.actor, 'narr') + g.players[this.narration.actor].name;
     } else if (g.phase === 'roundEnd') {
       label = `Rodada ${g.round}`;
@@ -1242,6 +1247,19 @@ const UI = {
       who = this.avatarHtml(g.current, 'narr') + g.players[g.current].name;
     }
     box.innerHTML = `<div class="label">${label}</div><div class="who ${mine ? 'mine' : ''}">${who}</div>`;
+    // Jogada de bot: botão para marcá-la como duvidosa (para conferir depois).
+    const j = this.narration && this.narration.actor != null ? Historico.buscar(this.actorTurn) : null;
+    if (j) {
+      const b = document.createElement('button');
+      b.className = 'narr-flag' + (j.marcada ? ' on' : '');
+      b.innerHTML = j.marcada ? '⚑ Marcada' : '⚑ Duvidosa?';
+      b.title = j.marcada ? 'Desmarcar esta jogada' : 'Marcar esta jogada para conferir depois';
+      b.onclick = () => {
+        this.toast(Historico.marcar(j.n) ? `Jogada ${j.n} marcada para conferir.` : `Jogada ${j.n} desmarcada.`);
+        this.render();
+      };
+      box.appendChild(b);
+    }
     if (this.narration && this.narration.text) {
       const t = document.createElement('div');
       t.className = 'what';
@@ -1444,6 +1462,7 @@ const UI = {
     const el = $('log');
     el.innerHTML = '';
     // Só mostra o que já foi animado/narrado, para não adiantar as jogadas.
+    let lastN = null;
     for (const entry of g.log.slice(0, this.logCursor).slice(-60).reverse()) {
       if (entry.why && !this.debug) continue; // explicações só no modo depuração
       const li = document.createElement('li');
@@ -1453,9 +1472,33 @@ const UI = {
         li.appendChild(this.whyEl(entry.why, false, entry.text));
       } else {
         li.innerHTML = cardTagsHtml(entry.text);
+        // Número da jogada (e a marca ⚑) na linha mais recente de cada jogada.
+        if (entry.n && entry.n !== lastN) li.prepend(this.turnTagEl(entry.n));
+        if (entry.n) lastN = entry.n;
       }
       el.appendChild(li);
     }
+  },
+
+  // "#37 ⚑": número da jogada e botão para marcá-la como duvidosa (para conferir depois).
+  turnTagEl(n) {
+    const j = Historico.buscar(n);
+    const tag = document.createElement('span');
+    tag.className = 'turn-tag';
+    tag.innerHTML = `<span class="turn-no">#${n}</span>`;
+    if (j) {
+      const b = document.createElement('button');
+      b.className = 'flag' + (j.marcada ? ' on' : '');
+      b.textContent = '⚑';
+      b.title = j.marcada ? 'Jogada marcada como duvidosa (clique para desmarcar)' : 'Marcar esta jogada como duvidosa, para conferir depois';
+      b.onclick = (e) => {
+        e.stopPropagation();
+        this.toast(Historico.marcar(n) ? `Jogada ${n} marcada para conferir.` : `Jogada ${n} desmarcada.`);
+        this.render();
+      };
+      tag.appendChild(b);
+    }
+    return tag;
   },
 
   // Caixa "Por quê?" com os motivos das decisões de um bot (modo depuração).
@@ -1607,6 +1650,13 @@ const UI = {
         <div class="set-who"><b>Mostrar as cartas dos bots</b><span>as mãos dos bots aparecem viradas para cima (só para estudar as jogadas)</span></div>
         <input type="checkbox" id="set-botcards"${this.showBotCards ? ' checked' : ''}>
       </label>
+      <h3>Histórico das partidas</h3>
+      <div class="set-row">
+        <div class="set-who"><b>Baixar o histórico</b><span>cada jogada fica gravada neste navegador (esta partida e a anterior),
+          com as cartas de todos e o motivo de cada bot. Marque as jogadas que achar estranhas com ⚑ no histórico ou no
+          quadro da jogada; depois baixe o arquivo para conferir na página de análise.</span></div>
+        <button class="btn-light" id="btn-history-download">Baixar</button>
+      </div>
       <p class="set-note">As configurações ficam guardadas num cookie deste navegador.</p>
       <div class="modal-actions">
         <button class="btn-light" id="btn-settings-reset" title="Volta o ritmo, a inteligência dos bots e o tamanho das cartas ao padrão">Restaurar padrão</button>
@@ -1649,6 +1699,13 @@ const UI = {
       this.toast('Configurações restauradas para o padrão.');
     };
     $('btn-settings-close').onclick = () => this.hideModal();
+    $('btn-history-download').onclick = () => this.downloadHistory();
+  },
+
+  downloadHistory() {
+    const marked = Historico.atual ? Historico.atual.jogadas.filter((j) => j.marcada).length : 0;
+    const name = Historico.baixar();
+    this.toast(`Histórico baixado (${name})` + (marked ? `, com ${marked} jogada${marked > 1 ? 's' : ''} marcada${marked > 1 ? 's' : ''}.` : '.'));
   },
 
   /*

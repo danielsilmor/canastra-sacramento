@@ -23,6 +23,8 @@
   <script src="js/ai.js"></script>
   <script src="js/mestre.js"></script>
   <script src="js/arena.js"></script>
+  <script src="js/historico.js"></script>
+  <script src="js/analise.js"></script>
   <script>
     const results = [];
     function check(name, condition, detail = '') {
@@ -300,6 +302,57 @@
       }
       check('Mestre joga uma rodada inteira sem erros', okRound && full.phase === 'roundEnd');
       GM.resetParams();
+    }
+
+    // Histórico: grava uma rodada e reconstrói cada jogada a partir da gravação.
+    {
+      const hg = new Game({ allBots: true });
+      Historico.iniciar(hg, { 0: 'moderado', 1: 'moderado', 2: 'moderado', 3: 'moderado' }, false);
+      hg.newMatch();
+      let steps = 0;
+      while ((hg.phase === 'draw' || hg.phase === 'play') && steps++ < 400) {
+        const s = hg.current;
+        AI.playTurnSync(hg, s, 'moderado');
+        Historico.anotarPorque(s, ['teste']);
+        if (hg.phase !== 'roundEnd' && hg.current === s) break;
+      }
+      const js = Historico.atual.jogadas;
+      check('Histórico: grava todas as jogadas da rodada, com número e ações',
+        js.length > 10 && js.every((j, i) => j.n === i + 1 && j.acoes.length > 0 && j.porque[0] === 'teste'),
+        `${js.length} jogadas`);
+      // Refazendo as ações de cada jogada a partir da foto, a mesa fica igual à foto da jogada seguinte.
+      let same = 0;
+      let firstDiff = '';
+      for (let i = 0; i + 1 < js.length; i++) {
+        const r = Historico.restaurar(js[i].antes, Historico.atual.nomes);
+        js[i].acoes.forEach((a) => Historico.aplicarAcao(r, js[i].lugar, a));
+        if (JSON.stringify(Historico.foto(r)) === JSON.stringify(js[i + 1].antes)) same++;
+        else if (!firstDiff) firstDiff = `jogada ${js[i].n}`;
+      }
+      check('Histórico: cada jogada refeita a partir da gravação chega na mesa da jogada seguinte',
+        same === js.length - 1, firstDiff);
+      check('Histórico: o fim da rodada fica gravado', Historico.atual.rodadas.length === 1 &&
+        Historico.atual.rodadas[0].depoisDaJogada === js[js.length - 1].n);
+      check('Histórico: as linhas do registro levam o número da jogada', hg.log.some((e) => e.n === js[3].n));
+      check('Histórico: marcar e desmarcar jogada', Historico.marcar(3) === true && Historico.buscar(3).marcada &&
+        Historico.marcar(3) === false);
+
+      // Análise: monta as decisões de uma jogada e confere com poucos mundos.
+      const partida = Historico.atual;
+      const j = js.find((x) => x.acoes.some((a) => a.tipo === 'discard') && x.antes.lixo.length > 0) || js[1];
+      let decs = [];
+      let texto = '';
+      try {
+        decs = Analise.decisoes(partida, j);
+        texto = Analise.conferirTexto(partida, j, 20);
+      } catch (e) {
+        texto = 'ERRO ' + e.message;
+      }
+      check('Análise: monta as decisões da jogada (compra, baixadas, descarte)',
+        decs.length >= 2 && decs.some((d) => d.tipo === 'Descarte'), decs.map((d) => d.tipo).join(', '));
+      check('Análise: confere a jogada e dá um veredito', /Boa jogada|razoável|pior|ruim|Só/.test(texto) && !texto.startsWith('ERRO'),
+        texto.slice(0, 200));
+      check('Análise: descreve a situação da mesa', Analise.situacao(partida, j).includes('Mãos'));
     }
 
     g = setup('JH QH KH AH 10S JS QS KS 9D');

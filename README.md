@@ -110,6 +110,21 @@ Na engrenagem, em **Depuração**, há duas opções (desligadas por padrão):
 - **Mostrar as cartas dos bots:** as mãos dos bots aparecem viradas para cima no quadro de cada um, para conferir se as decisões fazem sentido.
 
 As explicações usam só o que o bot sabe de verdade; mostrar as cartas é só para você estudar as jogadas.
+
+### Conferir jogadas (histórico gravado)
+
+O jogo grava cada jogada sozinho, neste navegador (a partida atual e a anterior): as cartas de todos antes da
+jogada, o monte, o lixo, os jogos na mesa, o que foi feito e o motivo de cada bot (mesmo com a depuração desligada).
+- Cada jogada tem um **número** (`#37`) no histórico e no quadro da jogada.
+- Achou uma jogada estranha? Clique em **⚑** no histórico, ou em **"⚑ Duvidosa?"** no quadro da jogada, para marcá-la.
+- Para conferir, clique em **⤓** no topo do histórico (ou na engrenagem, em "Histórico das partidas") e o arquivo
+  `canastra-historico-....json` vai para a pasta Downloads.
+- Abra **`analise.html`**, escolha o arquivo (ou "Usar o histórico deste navegador", se for o mesmo navegador) e
+  clique numa jogada: aparece a mesa inteira e o botão **"Conferir esta jogada"**. A conferência compara a compra,
+  as baixadas e o descarte com as outras opções que havia, jogando cada uma em milhares de "mundos possíveis"
+  (usando só o que o jogador da vez sabia), e diz se a jogada foi boa, razoável, um pouco pior ou ruim.
+- Pelo terminal, `ferramentas\analisar.ps1` faz o mesmo com o arquivo mais recente da pasta Downloads
+  (exemplo: `-Modo conferir -Jogadas marcadas`).
 - O visual usa a fonte Inter, que vem da internet. Sem internet, o jogo funciona normalmente com a fonte do sistema.
 
 ## Decisões tomadas onde o regulamento não era explícito
@@ -135,7 +150,11 @@ As explicações usam só o que o bot sabe de verdade; mostrar as cartas é só 
 | `js/mestre.js` | O Mestre (módulo independente): inferência, Monte Carlo adaptativo e decisões. |
 | `js/arena.js` | Torneios entre bots: partidas duplicadas, medidas e estatística. |
 | `js/ui.js` | Desenha a mesa e responde aos seus cliques. |
+| `js/historico.js` | Grava a partida jogada por jogada (para conferir depois) e baixa o histórico. |
+| `js/analise.js` | Reconstrói uma jogada gravada e compara a decisão com as alternativas. |
 | `torneio.html` | Página para rodar torneios entre bots. |
+| `analise.html` | Página para abrir o histórico baixado, ver cada jogada e conferir se foi boa. |
+| `ferramentas/analisar.ps1` | O mesmo da página de análise, pelo terminal (lê o histórico mais recente da pasta Downloads). |
 | `tests.html` | Testes automáticos: abra no navegador para conferir as regras e os bots (✅/❌). Também simula partidas só com computadores. |
 | `IA.md` | Como os bots pensam: arquitetura, decisões técnicas, resultados e limitações. |
 

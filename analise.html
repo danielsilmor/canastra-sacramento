@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Análise de jogadas · Canastra Sacramento</title>
+  <style>
+    :root { --bg: #000; --surface: #1c1c1e; --surface-2: #2c2c2e; --text: #f5f5f7; --muted: #8e8e93; --green: #30d158; --red: #ff453a; --yellow: #ffd60a; --orange: #ff9f0a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, "Segoe UI", Arial, sans-serif; padding: 24px 16px; }
+    main { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    p.sub { color: var(--muted); margin: 0 0 20px; }
+    .panel { background: var(--surface); border-radius: 16px; padding: 18px 20px; margin-bottom: 16px; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+    label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+    label.check { flex-direction: row; align-items: center; height: 38px; }
+    select, input[type=file] { font: inherit; color: var(--text); background: var(--surface-2); border: 0; border-radius: 10px; height: 38px; padding: 0 10px; }
+    input[type=file] { padding: 6px 10px; max-width: 100%; }
+    button { font: inherit; font-weight: 600; border: 0; border-radius: 12px; height: 40px; padding: 0 18px; cursor: pointer; background: var(--text); color: #000; }
+    button.light { background: var(--surface-2); color: var(--text); }
+    button:disabled { opacity: 0.4; cursor: default; }
+    .cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 16px; }
+    @media (max-width: 800px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+    #list { max-height: 70vh; overflow: auto; font-size: 13px; }
+    .turn { padding: 7px 8px; border-bottom: 1px solid #2c2c2e; cursor: pointer; border-radius: 8px; color: #d1d1d6; }
+    .turn:hover { background: var(--surface-2); }
+    .turn.sel { background: var(--surface-2); color: var(--text); }
+    .turn b { color: var(--muted); font-weight: 600; margin-right: 4px; }
+    .turn .flag { color: var(--red); }
+    .turn.round-end { color: var(--yellow); cursor: default; font-weight: 600; }
+    pre { white-space: pre-wrap; word-break: break-word; font: 13px/1.55 ui-monospace, Consolas, monospace; margin: 0; color: #e5e5ea; }
+    .bar { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin: 12px 0; }
+    .bar > div { height: 100%; width: 0; background: var(--green); transition: width 0.2s; }
+    .note { color: var(--muted); font-size: 13px; }
+    .verdict { font-weight: 600; margin: 6px 0 0; }
+    .verdict.boa { color: var(--green); } .verdict.empate { color: var(--yellow); }
+    .verdict.pior { color: var(--orange); } .verdict.ruim { color: var(--red); }
+    pre#result { display: none; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Análise de jogadas</h1>
+  <p class="sub">Abre o histórico gravado pelo jogo, mostra qualquer jogada com as cartas de todos e confere se a
+    decisão foi boa, comparando com as outras opções que havia.</p>
+
+  <div class="panel">
+    <div class="row">
+      <label>Arquivo do histórico (.json) <input type="file" id="file" accept=".json,application/json"></label>
+      <button class="light" id="local">Usar o histórico deste navegador</button>
+      <label>Partida <select id="match"></select></label>
+      <label class="check"><input type="checkbox" id="only-marked"> só as marcadas ⚑</label>
+      <label class="check"><input type="checkbox" id="only-bots" checked> só jogadas dos bots</label>
+      <label>Mundos por opção
+        <select id="worlds"><option value="500">500 (rápido)</option><option value="1500" selected>1.500</option><option value="4000">4.000 (mais preciso)</option></select>
+      </label>
+    </div>
+    <p class="note" id="status">Escolha o arquivo baixado no jogo (botão ⤓ do histórico ou nas configurações).</p>
+  </div>
+
+  <div class="cols">
+    <div class="panel"><div id="list"></div></div>
+    <div class="panel" id="detail">
+      <p class="note">Clique numa jogada para ver a situação da mesa.</p>
+    </div>
+  </div>
+  <pre id="result"></pre>
+</main>
+
+<script src="js/cards.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/mestre.js"></script>
+<script src="js/historico.js"></script>
+<script src="js/analise.js"></script>
+<script>
+  // Modo automático: ?dados=arquivo.js define DADOS_HISTORICO (carregado aqui, antes da análise).
+  (function () {
+    const d = new URLSearchParams(location.search).get('dados');
+    if (d) document.write('<script src="' + d.replace(/["<>]/g, '') + '"><\/script>');
+  })();
+</script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  let dados = null;
+  let sel = null;
+  let running = 0;
+
+  function load(d, origem) {
+    if (!d || !Array.isArray(d.partidas) || !d.partidas.length) {
+      $('status').textContent = 'Não encontrei nenhuma partida gravada.';
+      return;
+    }
+    dados = d;
+    $('match').innerHTML = d.partidas.map((p, i) => `<option value="${i}">${i === 0 ? 'Mais recente' : 'Anterior'} · ` +
+      `${new Date(p.inicio).toLocaleString('pt-BR')} · ${p.jogadas.length} jogadas</option>`).join('');
+    $('status').textContent = `Histórico carregado (${origem}).`;
+    showList();
+  }
+
+  const partida = () => dados.partidas[+$('match').value || 0];
+
+  function showList() {
+    if (!dados) return;
+    const p = partida();
+    const rows = [];
+    for (const j of p.jogadas) {
+      if ($('only-marked').checked && !j.marcada) continue;
+      if ($('only-bots').checked && j.nivel === 'humano') continue;
+      rows.push(`<div class="turn${sel === j.n ? ' sel' : ''}" data-n="${j.n}"><b>#${j.n}</b>${j.marcada ? '<span class="flag">⚑ </span>' : ''}` +
+        `${esc(j.nome)}: ${esc(j.registro.join(' '))}</div>`);
+      const fim = p.rodadas.find((r) => r.depoisDaJogada === j.n);
+      if (fim) rows.push(`<div class="turn round-end">Fim da rodada ${fim.rodada}: Nós ${fim.pontos[0]} × Eles ${fim.pontos[1]} ` +
+        `(placar ${fim.placar[0]} × ${fim.placar[1]})</div>`);
+    }
+    $('list').innerHTML = rows.join('') || '<p class="note">Nenhuma jogada com esse filtro.</p>';
+    $('list').querySelectorAll('.turn[data-n]').forEach((el) => (el.onclick = () => showTurn(+el.dataset.n)));
+  }
+
+  function showTurn(n) {
+    running++; // cancela uma conferência em andamento
+    sel = n;
+    const p = partida();
+    const j = p.jogadas.find((x) => x.n === n);
+    showList();
+    $('detail').innerHTML = `<pre>${esc(Analise.situacao(p, j))}</pre>
+      <div class="row" style="margin-top:14px"><button id="check">Conferir esta jogada</button></div>
+      <div id="check-out"></div>`;
+    $('check').onclick = () => check(p, j);
+  }
+
+  // Confere em pedaços, para a página não congelar.
+  async function check(p, j) {
+    const token = ++running;
+    const mundos = +$('worlds').value;
+    const out = $('check-out');
+    $('check').disabled = true;
+    let decs;
+    try {
+      decs = Analise.decisoes(p, j);
+    } catch (e) {
+      out.innerHTML = `<p class="note">Não deu para conferir: ${esc(e.message)}</p>`;
+      return;
+    }
+    out.innerHTML = `<div class="bar"><div id="prog"></div></div><p class="note">${Analise.NOTA}</p>`;
+    const parts = [];
+    for (let d = 0; d < decs.length; d++) {
+      const dec = decs[d];
+      if (dec.nota) {
+        parts.push(`<pre>${esc(dec.tipo + ': ' + dec.nota)}</pre>`);
+        continue;
+      }
+      const it = Analise.avaliar(dec, mundos);
+      let step = it.next();
+      while (!step.done) {
+        if ($('prog')) $('prog').style.width = `${(100 * (d + step.value / mundos)) / decs.length}%`;
+        await new Promise((r) => setTimeout(r, 0));
+        if (token !== running) return;
+        step = it.next();
+      }
+      const r = step.value;
+      parts.push(`<pre>${esc(Analise.textoResultado(r).split('\n').slice(0, -1).join('\n'))}</pre>` +
+        `<p class="verdict ${r.veredito.tipo}">${esc(r.veredito.texto)}</p>`);
+      out.innerHTML = `<div class="bar"><div id="prog"></div></div>${parts.join('<br>')}<p class="note">${Analise.NOTA}</p>`;
+    }
+    out.innerHTML = `${parts.join('<br>')}<p class="note" style="margin-top:14px">${Analise.NOTA}</p>`;
+    if ($('check')) $('check').disabled = false;
+  }
+
+  $('file').onchange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        load(JSON.parse(reader.result), f.name);
+      } catch (err) {
+        $('status').textContent = 'Esse arquivo não é um histórico válido.';
+      }
+    };
+    reader.readAsText(f);
+  };
+  $('local').onclick = () => load({ partidas: Historico.ler() }, 'deste navegador');
+  $('match').onchange = () => { sel = null; showList(); };
+  $('only-marked').onchange = showList;
+  $('only-bots').onchange = showList;
+
+  // Modo automático (para conferir pelo terminal):
+  // analise.html?auto=1&dados=dados.js&partida=0&modo=lista|texto|conferir&jogadas=37,40-45|marcadas&mundos=1500
+  const q = new URLSearchParams(location.search);
+  if (q.get('auto')) {
+    try {
+      const d = window.DADOS_HISTORICO;
+      const p = d.partidas[+q.get('partida') || 0];
+      const modo = q.get('modo') || 'lista';
+      const mundos = +q.get('mundos') || 1500;
+      const filtro = q.get('jogadas') || '';
+      let js = p.jogadas;
+      if (filtro === 'marcadas') js = js.filter((j) => j.marcada);
+      else if (filtro) {
+        const nums = new Set();
+        for (const part of filtro.split(',')) {
+          const [a, b] = part.split('-').map(Number);
+          for (let n = a; n <= (b || a); n++) nums.add(n);
+        }
+        js = js.filter((j) => nums.has(j.n));
+      }
+      const out = [`Partida de ${p.inicio} · ${p.jogadas.length} jogadas · jogadores: ${p.nomes.join(', ')}` +
+        ` · marcadas: ${p.jogadas.filter((j) => j.marcada).map((j) => j.n).join(', ') || 'nenhuma'}`];
+      if (modo === 'lista') {
+        for (const j of js) {
+          out.push(Analise.resumo(j));
+          const fim = p.rodadas.find((r) => r.depoisDaJogada === j.n);
+          if (fim) out.push(`--- Fim da rodada ${fim.rodada}: Nós ${fim.pontos[0]} × Eles ${fim.pontos[1]} (placar ${fim.placar[0]} × ${fim.placar[1]})`);
+        }
+      } else {
+        for (const j of js) {
+          out.push('='.repeat(80), Analise.situacao(p, j));
+          if (modo === 'conferir') out.push('', Analise.conferirTexto(p, j, mundos));
+        }
+      }
+      $('result').textContent = out.join('\n');
+    } catch (e) {
+      $('result').textContent = 'ERRO: ' + e.stack;
+    }
+    document.title = 'DONE';
+  }
+</script>
+</body>
+</html>

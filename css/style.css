@@ -312,7 +312,20 @@ details.why li { margin-bottom: 5px; }
 .log { flex: 1; min-height: 0; overflow: auto; padding: 14px 18px; }
 .log.collapsed { flex: none; overflow: hidden; }
 .log.collapsed ol { display: none; }
-.log-header { display: flex; align-items: center; justify-content: space-between; }
+.log-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.log-header h3 { flex: 1; }
+#btn-log-download { font-size: 15px; }
+/* Número da jogada e marca ⚑ (jogada duvidosa, para conferir depois) */
+.log li .turn-tag { float: right; display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; }
+.log .turn-no { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.log button.flag { height: auto; padding: 0 3px; border-radius: 6px; background: none; font-size: 13px; line-height: 1.2; color: var(--muted-2); }
+.log button.flag:hover:not(:disabled) { background: var(--surface-2); color: var(--text-2); }
+.log button.flag.on { color: var(--danger); }
+.narration { position: relative; }
+.narration button.narr-flag { position: absolute; top: 14px; right: 14px; width: auto; height: 28px; margin: 0; padding: 0 10px;
+  border-radius: 99px; background: var(--surface-2); color: var(--muted); font-size: 12px; }
+.narration button.narr-flag:hover:not(:disabled) { background: var(--surface-3); color: var(--text-2); }
+.narration button.narr-flag.on { color: var(--danger); }
 .log h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .log ol { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; }
 .log li { position: relative; padding: 8px 0 8px 16px; border-bottom: 1px solid var(--line); color: var(--text-2); line-height: 1.4; }

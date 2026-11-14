@@ -1607,7 +1607,8 @@ const UI = {
       esperto: 'Antes de comprar e de descartar, imagina várias continuações da rodada para cada opção e escolhe a que rende mais pontos. Do lixo, só conhece a carta de cima.',
       mestre: 'O mais forte. Decora o lixo inteiro e as cartas que cada jogador pegou dele, deduz as cartas dos ' +
         'adversários pelo que eles fazem (quem recusa um lixo provavelmente não tinha par para ele), compara todos ' +
-        'os descartes e vários jeitos de pegar o lixo, elimina cedo as opções claramente piores e só troca a jogada ' +
+        'os descartes e vários jeitos de pegar o lixo (prefere juntar num jogo da mesa e fechar canastra, poupando ' +
+        'curinga), elimina cedo as opções claramente piores e só troca a jogada ' +
         'das regras quando a vantagem é clara. Pensa um pouco mais por jogada.',
     };
     const options = (list, current) => list

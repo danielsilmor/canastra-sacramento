@@ -304,6 +304,79 @@
       GM.resetParams();
     }
 
+    // --- Mestre: regra nova de pegar o lixo ---
+    {
+      const showPlan = (p) => (!p ? 'nada' : p.additions ? `juntou ${p.additions[0].ids.length} cartas` : `jogo novo de ${p.newMelds[0].length}`);
+      // 6♥ 7♥ 8♥ da dupla na mesa, Q♥ no topo do lixo, 9♥ J♥ K♥ A♥ 2♣ na mão.
+      const mk = () => {
+        const x = setup('9H JH KH AH 2C 5S 9D', { phase: 'draw', discard: '4C QH' });
+        x.teams[0].opened = true;
+        x.teams[0].melds = [{ cards: cards('6H 7H 8H') }];
+        return x;
+      };
+      const old = AI.findPickup(mk(), 0);
+      check('Lixo, regra de sempre (outros níveis): desce J♥ Q♥ K♥ A♥ separado', old && old.newMelds && !old.additions, showPlan(old));
+      const x = mk();
+      AI.lixoNovo = true;
+      const neu = AI.findPickup(x, 0);
+      AI.lixoNovo = false;
+      check('Lixo, regra nova: junta no 6♥ 7♥ 8♥ e fecha a canastra', neu && neu.additions && neu.additions[0].meldIndex === 0 &&
+        x.applyMelds(0, neu).ok && x.teams[0].melds[0].cards.length === 9, showPlan(neu));
+      GM.resetParams();
+      const first = GM.pickupPlans(mk(), 0)[0];
+      GM.PARAMS.lixoNovo = false;
+      const firstOld = GM.pickupPlans(mk(), 0)[0];
+      GM.resetParams();
+      check('Mestre: o primeiro jeito de pegar o lixo é juntar (desligando a regra nova, volta o jeito antigo)',
+        first && first.additions && firstOld && firstOld.newMelds && !firstOld.additions, `${showPlan(first)} / ${showPlan(firstOld)}`);
+
+      // Só dá para pegar fazendo 4♠ 5♠ 6♠, que disputa cartas com 9♠ 10♠ J♠ Q♠ da dupla.
+      const small = (pile) => {
+        const y = setup('5S 6S KD 9D 4C 8H', { phase: 'draw', discard: pile });
+        y.teams[0].opened = true;
+        y.teams[0].melds = [{ cards: cards('9S 10S JS QS') }];
+        return y;
+      };
+      AI.lixoNovo = true;
+      const skip = AI.findPickup(small('8D 4S'), 0);
+      const take = AI.findPickup(small('8D 9C 10H KC 4S'), 0);
+      AI.lixoNovo = false;
+      check('Lixo, regra nova: deixa passar lixo pequeno quando o jeito de pegar é ruim (lixo grande, pega)',
+        skip === null && take && take.newMelds, `${showPlan(skip)} / ${showPlan(take)}`);
+
+      // Dupla sem abrir: pega o lixo abrindo o jogo (J♥ Q♥ K♥ A♥ + 10♠ J♠ Q♠ K♠ = 85 pontos).
+      const u = setup('QH KH AH 10S JS QS KS 5D', { phase: 'draw', discard: '7C JH' });
+      AI.lixoNovo = true;
+      const open = AI.findPickup(u, 0);
+      AI.lixoNovo = false;
+      check('Lixo, regra nova: sem abrir, pega o lixo abrindo o jogo', open && u.applyMelds(0, open).ok && u.teams[0].opened, showPlan(open));
+
+      // A regra nova vale só enquanto o Mestre pensa (inclusive nas simulações); nas pausas e nos outros níveis, não.
+      GM.resetParams();
+      Object.assign(GM.PARAMS, { worldsDraw: 8, worldsMelds: 8, worldsDiscard: 8, minWorlds: 8 });
+      const orig = AI.findPickup;
+      const seen = [];
+      AI.findPickup = (game, seat) => {
+        seen.push(AI.lixoNovo);
+        return orig(game, seat);
+      };
+      try {
+        const t = new Game({ allBots: true });
+        t.newMatch();
+        const pauses = [];
+        for (const it = AI.turnSteps(t, t.current, 'mestre'); !it.next().done;) pauses.push(AI.lixoNovo);
+        const mestre = seen.splice(0);
+        AI.playTurnSync(t, t.current, 'moderado');
+        check('Regra nova do lixo: ligada só enquanto o Mestre pensa (e nas simulações dele)',
+          mestre.length > 0 && mestre.every((v) => v) && pauses.length > 0 && pauses.every((v) => !v) && !AI.lixoNovo,
+          `simulações: ${mestre.length}, pausas: ${pauses.join(',')}`);
+        check('Regra nova do lixo: o Moderado continua com a regra de sempre', seen.length > 0 && seen.every((v) => !v), seen.join(','));
+      } finally {
+        AI.findPickup = orig;
+        GM.resetParams();
+      }
+    }
+
     // Histórico: grava uma rodada e reconstrói cada jogada a partir da gravação.
     {
       const hg = new Game({ allBots: true });
@@ -486,6 +559,7 @@
         sim.newMatch();
         const pause = async () => {
           if (sim.countCards() !== 106) throw new Error('cartas somaram ' + sim.countCards());
+          if (AI.lixoNovo) throw new Error('a regra nova do lixo ficou ligada na pausa da tela');
         };
         let guard = 0;
         try {

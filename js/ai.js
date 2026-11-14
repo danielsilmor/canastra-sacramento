@@ -18,7 +18,8 @@
  *   Mestre       módulo próprio (mestre.js): decora o lixo e as cartas que cada jogador
  *                pegou dele, deduz as cartas dos adversários pelo comportamento, compara
  *                todas as opções com Monte Carlo adaptativo e só troca a jogada das regras
- *                quando a vantagem é clara. Ver IA.md.
+ *                quando a vantagem é clara. Pega o lixo pela regra nova (compara todos os
+ *                jeitos: juntar num jogo da mesa, fechar canastra, poupar curinga). Ver IA.md.
  * Todas as jogadas passam pelas mesmas regras do game.js que o jogador humano.
  * Nenhum bot vê a mão dos outros nem a ordem do monte: nas simulações,
  * as cartas escondidas são sorteadas entre as que ele não conhece.
@@ -37,6 +38,9 @@ const AI = {
   // Simulação: cada sorteio é jogado "horizon" vezes à frente; "candidates" = quantos descartes comparar.
   // "maxRounds" é um teto geral (os testes diminuem para rodar rápido).
   SIM: { maxRounds: 10000, horizon: 8, candidates: 4 },
+  // Regra nova de pegar o lixo (ver pickupOptions): compara todos os jeitos em vez de ficar com o primeiro.
+  // Só o Mestre usa: o mestre.js liga enquanto ele pensa e joga, inclusive nas simulações dele.
+  lixoNovo: false,
 
   levelOf(level) {
     return AI.LEVELS[level] ? level : AI.DEFAULT_LEVEL;
@@ -414,6 +418,10 @@ const AI = {
   findPickup(game, seat) {
     const top = game.topDiscard;
     if (!top || game.isDiscardBlocked() || isThree(top)) return null;
+    if (AI.lixoNovo) { // regra nova (só enquanto o Mestre pensa)
+      const best = AI.bestPickups(game, seat, 1)[0];
+      return best && !AI.badSmallPickup(game, seat, best.score) ? best.plan : null;
+    }
     const p = game.players[seat];
     const team = game.teamOf(seat);
 
@@ -454,6 +462,115 @@ const AI = {
       }
     }
     return null;
+  },
+
+  // ---------- Pegar o lixo: regra nova (usada pelo Mestre) ----------
+
+  // Os "n" melhores jeitos de pegar o lixo pela regra nova, só os que o jogo aceita ({ plan, score }).
+  bestPickups(game, seat, n) {
+    const out = [];
+    for (const o of AI.pickupOptions(game, seat)) {
+      if (out.length >= n) break;
+      if (game.clone().applyMelds(seat, o.plan).ok) out.push(o);
+    }
+    return out;
+  },
+
+  // Lixo pequeno (até 3 cartas) cujo melhor jeito de pegar é ruim (nota negativa: jogo novo disputando
+  // cartas com outro do mesmo naipe, ou curinga gasto em jogo fraco): melhor comprar do monte.
+  badSmallPickup(game, seat, score) {
+    return game.teamOf(seat).opened && score < 0 && game.discardPile.length <= 3;
+  },
+
+  // Todos os grupos que pegam o lixo: o topo + 2 ou mais cartas da mão formando sequência
+  // (com no máximo 1 curinga). Cartas repetidas contam uma vez.
+  pickupGroups(top, hand) {
+    const out = [];
+    if (!top || isWild(top) || isThree(top)) return out;
+    const seen = new Set();
+    const typeKey = (c) => (isWild(c) ? (isJoker(c) ? 'JK' : 'W2') : `${c.rank}${c.suit}`);
+    const push = (cs) => {
+      if (cs.length < 3 || !Rules.analyzeMeld(cs).ok) return;
+      const k = cs.map(typeKey).sort().join(',');
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push(cs);
+    };
+    const wilds = [hand.find(isJoker), hand.find(isDirtyWild)].filter(Boolean);
+    if (top.rank === 14) {
+      const aces = hand.filter((c) => c.rank === 14);
+      if (aces.length >= 2) push([top, ...aces]);
+      for (const w of wilds) if (aces.length >= 1) push([top, ...aces, w]);
+    }
+    const byRank = new Map();
+    for (const c of hand) {
+      if (c.suit === top.suit && !isWild(c) && !isThree(c) && c.rank !== top.rank && !byRank.has(c.rank)) byRank.set(c.rank, c);
+    }
+    for (let lo = 4; lo <= top.rank; lo++) {
+      for (let hi = Math.max(top.rank, lo + 2); hi <= 14; hi++) {
+        const cs = [top];
+        let missing = 0;
+        for (let r = lo; r <= hi; r++) {
+          if (r === top.rank) continue;
+          if (byRank.has(r)) cs.push(byRank.get(r));
+          else missing++;
+        }
+        if (missing > 1) continue;
+        if (missing === 0) push(cs);
+        else for (const w of wilds) push([...cs, w]);
+      }
+    }
+    return out;
+  },
+
+  /*
+   * Todos os jeitos de pegar o lixo, do melhor para o pior ({ plan, score }).
+   * Dupla aberta: cada grupo pode ir para cada jogo da mesa em que encaixa, ou virar jogo novo.
+   *   + juntar num jogo da mesa; + fechar canastra (limpa vale mais); + usar mais cartas da mão;
+   *   − curinga gasto (coringão 3, coringuinha 2); − coringuinha sujando um jogo limpo;
+   *   − jogo novo disputando cartas com outro do mesmo naipe; − curinga em jogo novo fraco.
+   * Dupla sem abrir: para cada grupo, a abertura mais barata com o resto da mão (como bestOpening).
+   */
+  pickupOptions(game, seat) {
+    const top = game.topDiscard;
+    if (!top || game.isDiscardBlocked() || isThree(top)) return [];
+    const p = game.players[seat];
+    const team = game.teamOf(seat);
+    const out = [];
+    const wildCost = (cs) => cs.filter(isJoker).length * 3 + cs.filter(isDirtyWild).length * 2;
+    const idsOf = (grp) => grp.map((c) => (c === top ? 'TOP' : c.id));
+    const groups = AI.pickupGroups(top, p.hand);
+    if (team.opened) {
+      const growing = team.melds.filter((m) => !Rules.isCanastra(m.cards)).map((m) => m.cards);
+      for (const grp of groups) {
+        const fromHand = grp.length - 1;
+        team.melds.forEach((m, i) => {
+          const a = Rules.analyzeMeld(m.cards.concat(grp));
+          if (!a.ok) return;
+          const wasCanastra = Rules.isCanastra(m.cards);
+          let score = 10 + fromHand * 0.5 - wildCost(grp);
+          if (!wasCanastra && a.ordered.length >= 7) score += Rules.isDirty(a.ordered) ? 20 : 30;
+          if (grp.some(isDirtyWild) && !Rules.isDirty(m.cards) && !wasCanastra) score -= 4;
+          out.push({ plan: { pickup: true, additions: [{ meldIndex: i, ids: idsOf(grp) }] }, score });
+        });
+        let score = fromHand * 0.5 - wildCost(grp);
+        if (Rules.isCanastra(grp)) score += Rules.isDirty(grp) ? 20 : 30;
+        if (AI.competingRun(growing, grp)) score -= 8;
+        if (grp.some(isWild) && AI.isWeak(grp, AI.tableCounts(game, [grp]))) score -= 4;
+        out.push({ plan: { pickup: true, newMelds: [idsOf(grp)] }, score });
+      }
+    } else {
+      for (const grp of groups) {
+        const rest = p.hand.filter((c) => !grp.includes(c));
+        const best = AI.openingCandidates(game, rest, team.minOpen, grp)[0];
+        if (!best) continue;
+        out.push({
+          plan: { pickup: true, newMelds: [idsOf(grp), ...best.melds.slice(1).map((m) => m.map((c) => c.id))] },
+          score: -best.cost + best.points / 1000,
+        });
+      }
+    }
+    return out.sort((a, b) => b.score - a.score);
   },
 
   // ---------- Chance de canastra ----------
@@ -540,8 +657,12 @@ const AI = {
    * que o 2), sem curinga em jogo fraco; empate: a que soma mais pontos.
    */
   bestOpening(game, seat) {
-    const hand = game.players[seat].hand;
-    const team = game.teamOf(seat);
+    return AI.openingCandidates(game, game.players[seat].hand, game.teamOf(seat).minOpen);
+  },
+
+  // Montagens de abertura com as cartas "hand", da mais barata para a mais cara.
+  // "fixed" = um jogo que entra obrigatoriamente (o grupo que pega o lixo), sempre o primeiro.
+  openingCandidates(game, hand, minOpen, fixed = null) {
     const candidates = [];
     const seen = new Set();
     for (const acesFirst of [false, true]) {
@@ -549,9 +670,10 @@ const AI = {
         const set = AI.findMelds(hand, allowDirty, acesFirst);
         // Todas as combinações de jogos desse conjunto (no máximo 2^8).
         const n = Math.min(set.length, 8);
-        for (let mask = 1; mask < (1 << n); mask++) {
-          const melds = set.filter((m, i) => mask & (1 << i));
-          if (!Rules.opensGame(melds, team.minOpen)) continue;
+        for (let mask = fixed ? 0 : 1; mask < (1 << n); mask++) {
+          const chosen = set.filter((m, i) => mask & (1 << i));
+          const melds = fixed ? [fixed, ...chosen] : chosen;
+          if (!Rules.opensGame(melds, minOpen)) continue;
           const key = melds.map((m) => m.map((c) => c.id).sort().join(',')).sort().join('|');
           if (seen.has(key)) continue;
           seen.add(key);

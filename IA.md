@@ -18,6 +18,9 @@ e o que os testes mostraram. O nível mais forte é o **Mestre** (`js/mestre.js`
   e ficou desligada.
 - Ordem de força confirmada: Aleatório < Iniciante < Moderado < Esperto ≤ Mestre antigo < Mestre.
 - Contra o **Moderado**, o Mestre fez **+394 ± 78 pontos por rodada** e venceu 69% das rodadas.
+- **Regra nova de pegar o lixo** (só no Mestre): compara todos os jeitos em vez de ficar com o primeiro (prefere
+  juntar num jogo da mesa e fechar canastra, poupa curinga). **+37 ± 23 pontos por rodada** contra o Mestre sem
+  ela, em 3.840 rodadas. Ver 2.9.
 - Custo: 0,23 s por jogada em média no jogo (máximo ~0,7 s); o Mestre antigo usa ~0,09 s.
 
 ## 1. Análise do projeto
@@ -104,7 +107,7 @@ estado ───► │ gera alternativas ──► sorteia mundos possíveis �
 
 ### 2.2 Monte Carlo adaptativo
 
-- **Alternativas completas:** compra = monte + até 3 jeitos de pegar o lixo; descarte = **todas** as cartas
+- **Alternativas completas:** compra = monte + os 3 melhores jeitos de pegar o lixo (ver 2.9); descarte = **todas** as cartas
   diferentes da mão (curinga só se não houver outra); baixadas = ver 2.3.
 - **Mesmos mundos para todas** (números aleatórios comuns): a comparação é justa e menos barulhenta.
 - **Corrida com eliminação:** a cada 8 mundos, as alternativas cuja desvantagem para a líder é maior que
@@ -175,6 +178,54 @@ primeiro ganham nota. Com `utility: 'vitoria'`, o placar total da partida també
   desatualizado a cada mudança, e a abordagem de busca com inferência é mais barata e mais fácil de explicar
   (o modo depuração mostra o raciocínio).
 
+### 2.9 Pegar o lixo (regra nova, só do Mestre)
+
+**O problema** (visto em partidas e confirmado medindo 240 rodadas do Mestre): ao pegar o lixo, o bot ficava com
+o primeiro jeito que achava. Com 6♥ 7♥ 8♥ na mesa, Q♥ no lixo e 9♥ J♥ K♥ A♥ 2♣ na mão, descia J♥ Q♥ K♥ A♥
+separado em vez de juntar tudo numa canastra de 9 cartas. Nas 240 rodadas: de 676 lixos que viraram jogo novo
+com a dupla aberta, 150 disputavam cartas com outro jogo do mesmo naipe; 18 vezes dava para juntar e desceu
+separado (15 delas fechariam canastra); 473 gastaram curinga, 116 deles em jogo fraco (somando todos os lixos
+pegos com a dupla aberta, o coringão foi gasto 87 vezes e o coringuinha 418).
+Conferidas uma a uma (160 jogadas suspeitas), cerca de 15% eram claramente piores, com perda média de 90 a
+130 pontos; o erro mais comum era pegar um lixo pequeno gastando curinga quando comprar do monte era melhor.
+
+**A regra** (`AI.pickupOptions`): lista todos os grupos que pegam o lixo (o topo + 2 ou mais cartas da mão, com no
+máximo 1 curinga) e, para cada um, cada jogo da mesa em que encaixa, ou jogo novo. Cada jeito ganha uma nota:
+
+| Situação | Nota |
+|---|---|
+| juntar num jogo da mesa | +10 |
+| fechar canastra (limpa / suja) | +30 / +20 |
+| cada carta da mão usada | +0,5 |
+| curinga gasto (coringão / coringuinha) | −3 / −2 |
+| coringuinha sujando um jogo limpo | −4 |
+| jogo novo disputando cartas com outro do mesmo naipe | −8 |
+| curinga em jogo novo fraco (pouca chance de canastra) | −4 |
+
+Com a dupla sem abrir, fica com a abertura que gasta menos curingas. Se o lixo é pequeno (até 3 cartas) e o
+melhor jeito tem nota negativa, a escolha das regras passa a ser **comprar do monte** (a corrida ainda pega o
+lixo se a vantagem for clara). O Mestre compara o monte com os **3 melhores** jeitos.
+
+**Só no Mestre:** a regra (`AI.lixoNovo`) fica ligada enquanto ele pensa e joga, inclusive para os jogadores que ele
+imagina nas simulações; nas pausas da tela e na vez dos outros níveis fica desligada. Iniciante, Moderado e
+Esperto pegam o lixo como antes. `GM.PARAMS.lixoNovo: false` volta ao jeito antigo (no torneio: "gm-lixo-antigo").
+
+**Resultado:** **+37 ± 23 pontos por rodada** contra o Mestre sem a regra (3.840 rodadas, dois lotes: +19 ± 62 e
++40 ± 25); venceu 52% das rodadas contra 48%, fez um pouco mais de canastras limpas (0,75 contra 0,73 por rodada)
+e entregou menos lixo ao adversário (99 contra 113 a cada 100 rodadas). Custa ~7% a mais de tempo por jogada.
+No Moderado (só para medir as partes, não foi adotado lá):
+
+| Partes ligadas (Moderado × Moderado) | Rodadas | Diferença por rodada |
+|---|---|---|
+| todas (juntar + abrir com menos curingas + deixar passar lixo pequeno ruim) | 20.000 | +33 ± 8 |
+| juntar + deixar passar lixo pequeno ruim | 16.000 | +29 ± 8 |
+| juntar + abrir com menos curingas | 4.000 | +8 ± 10 |
+| só juntar | 4.000 | +7 ± 7 |
+| só abrir com menos curingas | 16.000 | +2 ± 4 |
+
+A maior parte do ganho vem de **juntar com a nota nova junto com deixar passar o lixo pequeno ruim**; abrir com
+menos curingas quase não muda nada.
+
 ## 3. Testes e validação
 
 ### 3.1 Como foi medido
@@ -235,10 +286,12 @@ entre elas é ruído. A final foi escolhida por ser ~25% mais rápida.
 
 ### 3.4 Testes automáticos (`tests.html`)
 
-90 testes, entre eles: duplicação exata do torneio; registro público (recusas e descartes); inferência (pares
+105 testes, entre eles: duplicação exata do torneio; registro público (recusas e descartes); inferência (pares
 para o topo do lixo, peso menor para mundos que contradizem uma recusa); a corrida elimina cedo uma alternativa
 claramente pior; o sorteio nunca põe 3 vermelho em mão imaginada; o Mestre joga uma rodada inteira sem
-erros e sem sumir carta; partidas inteiras com todos os níveis juntos.
+erros e sem sumir carta; a regra nova do lixo (junta no 6♥ 7♥ 8♥ e fecha a canastra, deixa passar lixo pequeno
+ruim, abre o jogo pegando o lixo, vale só enquanto o Mestre pensa e o Moderado continua igual); partidas
+inteiras com todos os níveis juntos.
 
 ## 4. Decisões técnicas e o que foi testado e descartado
 
@@ -254,6 +307,7 @@ erros e sem sumir carta; partidas inteiras com todos os níveis juntos.
 | Adiar a abertura para pegar um lixo grande (monte com 25+, adversários sem abrir, abertura sem canastra, máx. 2 vezes): rigorosa (lixo 5+, 3 pares na mão) e solta (lixo 3+, 2 pares) | −53 ± 56 e −29 ± 62 (640 rodadas cada); adiou em 4% e 9% das rodadas e, quando adiou, abriu pegando o lixo em cerca de metade das vezes | descartado: não compensa |
 | Descer mais cedo (baixar logo as sequências de 3 cartas) | +7 ± 62 (640 rodadas) | descartado (empate) |
 | Segurar mais (guardar também as sequências de 4 cartas) | +16 ± 60 (640 rodadas) | descartado (empate) |
+| Pegar o lixo pela regra nova: compara todos os jeitos (juntar num jogo da mesa, fechar canastra, poupar curinga, deixar passar lixo pequeno ruim) | **+37 ± 23** contra o Mestre sem ela (3.840 rodadas); no Moderado, +33 ± 8 (20.000 rodadas) | **mantido, só no Mestre** (ver 2.9) |
 | **Aprendizado de máquina** | não usado | regras ainda mudando; busca com inferência é mais barata, mede-se bem e explica as decisões |
 
 **Por que "preferir a regra"?** Com poucas centenas de simulações, a média de cada opção tem ruído; escolher

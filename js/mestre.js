@@ -18,6 +18,10 @@
  *     Decisões mais importantes (lixo grande, adversário aberto) recebem mais simulações.
  *  3. Busca nas baixadas: compara jeitos de baixar (padrão, guardar, baixar tudo, outra abertura).
  *  4. Utilidade: pontos da rodada (padrão) ou chance de vencer a partida.
+ *  5. Lixo pela regra nova (AI.pickupOptions): compara todos os jeitos de pegar o lixo (juntar num
+ *     jogo da mesa, fechar canastra, jogo novo), poupa curinga em jogo fraco ou que disputa cartas
+ *     com outro do mesmo naipe e deixa passar lixo pequeno (até 3 cartas) quando o jeito é ruim.
+ *     Vale também para os jogadores que ele imagina nas simulações.
  * Não trapaceia: usa só o que está à vista e o que ele decorou (lixo inteiro e cartas que cada um pegou dele).
  */
 
@@ -42,6 +46,7 @@ const GM = {
     meldSearch: false,     // comparar jeitos de baixar (desligado: nos torneios não trouxe ganho e custa ~25% de tempo)
     wideDiscard: true,     // comparar todos os descartes (senão, só os 4 melhores da regra)
     maxPickupPlans: 3,     // jeitos diferentes de pegar o lixo a comparar
+    lixoNovo: true,        // pegar o lixo pela regra nova (desligado: o jeito antigo, para comparar nos torneios)
     utility: 'pontos',     // 'pontos' ou 'vitoria' (chance de vencer a partida)
     winScale: 1500,        // largura da curva de chance de vitória
   },
@@ -49,7 +54,25 @@ const GM = {
 
   // ---------- A vez inteira ----------
 
+  // A regra nova de pegar o lixo (AI.lixoNovo) fica ligada enquanto o Mestre pensa e joga,
+  // inclusive nas simulações dele. Nas pausas da tela (e na vez dos outros níveis) fica desligada.
   *turnSteps(game, seat) {
+    const steps = GM.steps(game, seat);
+    for (;;) {
+      const before = AI.lixoNovo;
+      AI.lixoNovo = GM.PARAMS.lixoNovo;
+      let r;
+      try {
+        r = steps.next();
+      } finally {
+        AI.lixoNovo = before;
+      }
+      if (r.done) return;
+      yield;
+    }
+  },
+
+  *steps(game, seat) {
     if (game.phase === 'draw') {
       const d = GM.chooseDraw(game, seat);
       let took = false;
@@ -276,24 +299,39 @@ const GM = {
 
   // Comprar: monte ou um dos jeitos de pegar o lixo.
   chooseDraw(game, seat) {
-    const plans = GM.pickupPlans(game, seat);
-    if (!plans.length) {
+    const ways = GM.pickupWays(game, seat);
+    if (!ways.length) {
       AI.note(AI.whyNoPickup(game, seat));
       return { kind: 'stock' };
     }
-    if (!game.stock.length) return { kind: 'pickup', plan: plans[0] }; // sem monte, só resta o lixo
+    if (!game.stock.length) return { kind: 'pickup', plan: ways[0].plan }; // sem monte, só resta o lixo
     const cands = [{ kind: 'stock', label: 'comprar do monte' },
-      ...plans.map((plan, i) => ({ kind: 'pickup', plan, label: plans.length > 1 ? `pegar o lixo (jeito ${i + 1})` : 'pegar o lixo' }))];
-    // Escolha das regras do Moderado: pega o lixo, a não ser que dê para fechar canastra com curinga.
-    const preferred = AI.wildClosesCanastra(game, seat) ? 0 : 1;
+      ...ways.map((w, i) => ({ kind: 'pickup', plan: w.plan, label: ways.length > 1 ? `pegar o lixo (jeito ${i + 1})` : 'pegar o lixo' }))];
+    // Escolha das regras: pega o lixo, a não ser que dê para fechar canastra com curinga
+    // ou (regra nova) que o lixo seja pequeno e o melhor jeito de pegar seja ruim.
+    const skip = GM.PARAMS.lixoNovo && AI.badSmallPickup(game, seat, ways[0].score);
+    const preferred = AI.wildClosesCanastra(game, seat) || skip ? 0 : 1;
     const best = GM.race(game, seat, cands, AI.applyCandidate,
       Math.round(GM.PARAMS.worldsDraw * GM.importance(game, seat, 'draw')), preferred);
     AI.note(`${GM.summary(cands, 'jeitos de comprar')} Escolheu ${best.label}.${GM.keptText()}`);
     return best;
   },
 
-  // Todos os jeitos razoáveis de pegar o lixo (topo + 2 ou mais cartas da mão).
+  // Os jeitos de pegar o lixo a comparar, do melhor para o pior (só os planos; a análise de jogadas também usa).
   pickupPlans(game, seat) {
+    return GM.pickupWays(game, seat).map((w) => w.plan);
+  },
+
+  // Os jeitos de pegar o lixo com a nota de cada um ({ plan, score }): pela regra nova, os melhores
+  // pela nota de AI.pickupOptions; com "lixoNovo" desligado, o jeito antigo (sem nota).
+  pickupWays(game, seat) {
+    if (GM.PARAMS.lixoNovo) return AI.bestPickups(game, seat, GM.PARAMS.maxPickupPlans);
+    return GM.oldPickupPlans(game, seat).map((plan) => ({ plan, score: 0 }));
+  },
+
+  // Jeito antigo (só para comparar nos torneios): os primeiros grupos achados (topo + 2 ou mais
+  // cartas da mão), limpos antes de sujos; o grupo vai para o primeiro jogo da mesa em que encaixa.
+  oldPickupPlans(game, seat) {
     const top = game.topDiscard;
     if (!top || game.isDiscardBlocked() || isThree(top)) return [];
     const p = game.players[seat];

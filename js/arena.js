@@ -24,6 +24,7 @@ const Arena = {
     'gm-descarte-curto': { label: 'Mestre com descarte só entre 4', level: 'mestre', gm: { wideDiscard: false } },
     'gm-vitoria': { label: 'Mestre jogando pela vitória', level: 'mestre', gm: { utility: 'vitoria' } },
     'gm-sem-preferencia': { label: 'Mestre sem preferir as regras', level: 'mestre', gm: { preferZ: 0 } },
+    'gm-lixo-antigo': { label: 'Mestre com o jeito antigo de pegar o lixo', level: 'mestre', gm: { lixoNovo: false } },
   },
 
   // Gerador de números aleatórios com semente (mulberry32): a mesma semente dá o mesmo baralho.

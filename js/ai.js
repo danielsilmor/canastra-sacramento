@@ -1,7 +1,7 @@
 /*
  * ai.js: Os jogadores do computador (bots)
  *
- * Quatro níveis de inteligência (escolhidos na engrenagem, para cada bot):
+ * Cinco níveis de inteligência (escolhidos na engrenagem, para cada bot):
  *   Iniciante    joga com bom senso, mas comete alguns erros de propósito.
  *   Moderado     abre gastando o mínimo de curingas (compara várias montagens),
  *                conta as cartas já presas em jogos na mesa para saber a chance de canastra
@@ -15,14 +15,16 @@
  *   Esperto       antes de comprar e de descartar, "imagina" várias continuações da rodada
  *                para cada opção e escolhe a que rende mais pontos. Do lixo, só conhece
  *                a carta de cima (não decora o resto).
- *   Mestre       módulo próprio (mestre.js): decora o lixo e as cartas que cada jogador
- *                pegou dele, deduz as cartas dos adversários pelo comportamento, compara
+ *   Estratégico  módulo próprio (mestre.js; chave "mestre"): decora o lixo e as cartas que cada
+ *                jogador pegou dele, deduz as cartas dos adversários pelo comportamento, compara
  *                todas as opções com Monte Carlo adaptativo e só troca a jogada das regras
  *                quando a vantagem é clara. Pega o lixo pela regra nova (compara todos os
  *                jeitos: juntar num jogo da mesa, fechar canastra, poupar curinga). Ver IA.md.
+ *   Mestre       o mesmo módulo (chave "vidente"), mas trapaceia de propósito: vê as mãos de
+ *                todos e a ordem do monte, e simula a rodada com as cartas de verdade.
  * Todas as jogadas passam pelas mesmas regras do game.js que o jogador humano.
- * Nenhum bot vê a mão dos outros nem a ordem do monte: nas simulações,
- * as cartas escondidas são sorteadas entre as que ele não conhece.
+ * Só o Mestre vê a mão dos outros e a ordem do monte; os outros níveis, nas simulações,
+ * sorteiam as cartas escondidas entre as que não conhecem.
  */
 
 const AI = {
@@ -31,8 +33,13 @@ const AI = {
     moderado: { label: 'Moderado', sim: false },
     // rounds = quantos sorteios das cartas escondidas por decisão; budgetMs = tempo máximo para pensar.
     esperto: { label: 'Esperto', sim: true, memory: false, rounds: 120, budgetMs: 700 },
-    // Mestre: módulo próprio (mestre.js). Um nível com "hidden: true" não aparece nas configurações.
-    mestre: { label: 'Mestre', sim: true, memory: true, engine: 'gm' },
+    // Módulo próprio (mestre.js). Um nível com "hidden: true" não aparece nas configurações.
+    // "gm" = parâmetros do mestre.js que valem só na vez desse nível.
+    // A chave "mestre" ficou com o motor honesto (que se chamava Mestre e virou Estratégico), para as
+    // configurações guardadas e os históricos antigos continuarem com o mesmo bot.
+    mestre: { label: 'Estratégico', sim: true, memory: true, engine: 'gm' },
+    // Mestre: o mesmo motor, mas vê as cartas escondidas (mãos de todos e a ordem do monte).
+    vidente: { label: 'Mestre', sim: true, memory: true, engine: 'gm', gm: { enxerga: 'tudo' } },
   },
   DEFAULT_LEVEL: 'moderado',
   // Simulação: cada sorteio é jogado "horizon" vezes à frente; "candidates" = quantos descartes comparar.
@@ -84,7 +91,7 @@ const AI = {
   // Os passos da vez. Cada "yield" é um ponto em que a tela pode mostrar o que aconteceu.
   *turnSteps(game, seat, level) {
     if (AI.LEVELS[level] && AI.LEVELS[level].engine === 'gm') { // Mestre: decide pelo mestre.js
-      yield* GM.turnSteps(game, seat);
+      yield* GM.turnSteps(game, seat, AI.LEVELS[level].gm);
       return;
     }
     if (game.phase === 'draw') {

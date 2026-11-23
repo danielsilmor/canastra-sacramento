@@ -300,7 +300,7 @@
       } catch (e) {
         okRound = false;
       }
-      check('Mestre joga uma rodada inteira sem erros', okRound && full.phase === 'roundEnd');
+      check('Estratégico joga uma rodada inteira sem erros', okRound && full.phase === 'roundEnd');
       GM.resetParams();
     }
 
@@ -375,6 +375,65 @@
         AI.findPickup = orig;
         GM.resetParams();
       }
+    }
+
+    // --- Nível Mestre: vê as cartas escondidas (o antigo Mestre virou Estratégico) ---
+    {
+      check('Níveis: Mestre (vê as cartas) e Estratégico (o motor honesto, chave antiga "mestre")',
+        AI.LEVELS.vidente.label === 'Mestre' && AI.LEVELS.vidente.gm.enxerga === 'tudo' &&
+        AI.LEVELS.mestre.label === 'Estratégico' && !AI.LEVELS.mestre.gm);
+      GM.resetParams();
+      const v = new Game({ allBots: true });
+      v.newMatch();
+      const seat = v.current;
+      const ids = (cs) => cs.map((c) => c.id).join(',');
+      GM.PARAMS.enxerga = 'tudo';
+      const [w] = GM.sampleWorlds(v, seat, 3);
+      const exato = [0, 1, 2, 3].filter((s) => s !== seat).every((s) => ids(w.hands[s]) === ids(v.players[s].hand)) &&
+        ids(w.stock) === ids(v.stock);
+      GM.resetParams();
+      check('Mestre: as simulações usam as mãos e o monte de verdade', exato);
+
+      // Os parâmetros do Mestre valem só durante a vez dele (e uma simulação por opção basta).
+      Object.assign(GM.PARAMS, { worldsDraw: 16, worldsMelds: 16, worldsDiscard: 16, minWorlds: 8 });
+      const orig = GM.race;
+      const visto = [];
+      GM.race = function (...args) {
+        const r = orig.apply(this, args);
+        visto.push(`${GM.PARAMS.enxerga}:${GM.stats.worlds}`);
+        return r;
+      };
+      try {
+        AI.playTurnSync(v, v.current, 'vidente');
+        const doMestre = visto.splice(0);
+        if (v.phase !== 'roundEnd') AI.playTurnSync(v, v.current, 'mestre');
+        check('Mestre: vê as cartas só na vez dele, com uma simulação por opção; o Estratégico continua sorteando',
+          doMestre.length > 0 && doMestre.every((x) => x === 'tudo:1') && GM.PARAMS.enxerga === 'nada' &&
+          visto.length > 0 && visto.every((x) => x.startsWith('nada:') && x !== 'nada:1'),
+          `Mestre: ${doMestre.join(' ')} | Estratégico: ${visto.join(' ')}`);
+      } finally {
+        GM.race = orig;
+      }
+
+      // Uma rodada inteira: Mestre contra Moderado, sem erros e sem sumir carta.
+      const r = new Game({ allBots: true });
+      r.newMatch();
+      let ok = true;
+      let n = 0;
+      try {
+        while ((r.phase === 'draw' || r.phase === 'play') && n++ < 400) {
+          const s = r.current;
+          AI.playTurnSync(r, s, s % 2 === 0 ? 'vidente' : 'moderado');
+          if (r.countCards() !== 106 || (r.phase !== 'roundEnd' && r.current === s)) {
+            ok = false;
+            break;
+          }
+        }
+      } catch (e) {
+        ok = false;
+      }
+      check('Mestre joga uma rodada inteira sem erros', ok && r.phase === 'roundEnd');
+      GM.resetParams();
     }
 
     // Histórico: grava uma rodada e reconstrói cada jogada a partir da gravação.

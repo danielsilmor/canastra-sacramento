@@ -1,11 +1,16 @@
 /*
- * mestre.js: Mestre, o bot mais forte.
+ * mestre.js: o motor dos dois níveis mais fortes.
+ *   Estratégico (chave "mestre"): joga honesto, só com o que está à vista e o que decorou.
+ *   Mestre (chave "vidente"): o mesmo motor com enxerga = 'tudo': vê as mãos de todos e a ordem
+ *     do monte (trapaça declarada) e simula a rodada com as cartas de verdade.
+ * Neste arquivo, "Mestre" é o motor (vale para os dois níveis).
  *
  * Interface (a lógica do jogo fica no game.js; aqui só se decide):
  *   GM.chooseDraw(game, seat)    → { kind: 'stock' } ou { kind: 'pickup', plan }
  *   GM.chooseMelds(game, seat)   → { name, label, apply(game, seat) }
  *   GM.chooseDiscard(game, seat) → a carta a descartar
- *   GM.turnSteps(game, seat)     → joga a vez inteira (usado pelo ai.js, como os outros níveis)
+ *   GM.turnSteps(game, seat, gm) → joga a vez inteira (usado pelo ai.js, como os outros níveis);
+ *                                  "gm" = parâmetros próprios do nível, só durante a vez dele
  *
  * Como pensa (explicação completa em IA.md):
  *  1. Inferência: sorteia "mundos possíveis" para as cartas que não vê e dá peso a cada um
@@ -22,7 +27,9 @@
  *     jogo da mesa, fechar canastra, jogo novo), poupa curinga em jogo fraco ou que disputa cartas
  *     com outro do mesmo naipe e deixa passar lixo pequeno (até 3 cartas) quando o jeito é ruim.
  *     Vale também para os jogadores que ele imagina nas simulações.
- * Não trapaceia: usa só o que está à vista e o que ele decorou (lixo inteiro e cartas que cada um pegou dele).
+ * O Estratégico não trapaceia: usa só o que está à vista e o que decorou (lixo inteiro e cartas que
+ * cada um pegou dele). O Mestre troca a inferência (1) pelas cartas de verdade: como o mundo é um só
+ * e as simulações não têm sorteio, basta uma simulação por alternativa (pensa quase na hora).
  */
 
 const GM = {
@@ -47,6 +54,8 @@ const GM = {
     wideDiscard: true,     // comparar todos os descartes (senão, só os 4 melhores da regra)
     maxPickupPlans: 3,     // jeitos diferentes de pegar o lixo a comparar
     lixoNovo: true,        // pegar o lixo pela regra nova (desligado: o jeito antigo, para comparar nos torneios)
+    enxerga: 'nada',       // 'nada' = sorteia as cartas escondidas (Estratégico);
+                           // 'tudo' = vê as mãos de todos e a ordem do monte (nível Mestre: trapaça declarada)
     utility: 'pontos',     // 'pontos' ou 'vitoria' (chance de vencer a partida)
     winScale: 1500,        // largura da curva de chance de vitória
   },
@@ -56,16 +65,20 @@ const GM = {
 
   // A regra nova de pegar o lixo (AI.lixoNovo) fica ligada enquanto o Mestre pensa e joga,
   // inclusive nas simulações dele. Nas pausas da tela (e na vez dos outros níveis) fica desligada.
-  *turnSteps(game, seat) {
+  // "extra" = parâmetros do nível (ex.: o Mestre que vê as cartas), também só durante a vez.
+  *turnSteps(game, seat, extra = null) {
     const steps = GM.steps(game, seat);
     for (;;) {
       const before = AI.lixoNovo;
+      const params = GM.PARAMS;
+      if (extra) GM.PARAMS = { ...params, ...extra };
       AI.lixoNovo = GM.PARAMS.lixoNovo;
       let r;
       try {
         r = steps.next();
       } finally {
         AI.lixoNovo = before;
+        GM.PARAMS = params;
       }
       if (r.done) return;
       yield;
@@ -119,6 +132,10 @@ const GM = {
    */
   sampleWorlds(game, seat, n) {
     const P = GM.PARAMS;
+    if (P.enxerga === 'tudo') { // nível Mestre: o único mundo é o de verdade
+      const real = GM.realWorld(game, seat);
+      return Array.from({ length: n }, () => real);
+    }
     if (!P.beliefs) return Array.from({ length: n }, () => AI.guessHidden(game, seat, true));
     const m = n * P.oversample;
     const pool = [];
@@ -145,6 +162,13 @@ const GM = {
     }
     while (out.length < n) out.push(pool[pool.length - 1].hidden);
     return out;
+  },
+
+  // Nível Mestre (vê tudo): as mãos dos outros e o monte exatamente como estão.
+  realWorld(game, seat) {
+    const hands = {};
+    for (const p of game.players) if (p.seat !== seat) hands[p.seat] = [...p.hand];
+    return { hands, discardPile: [...game.discardPile], stock: [...game.stock] };
   },
 
   // Quão plausível é um mundo, dado o que cada jogador fez à vista de todos nesta rodada.
@@ -201,6 +225,9 @@ const GM = {
    */
   race(game, seat, cands, apply, maxWorlds, preferred = -1) {
     const P = GM.PARAMS;
+    // Vendo tudo, todos os "mundos" são o mesmo e as simulações não têm sorteio: um mundo basta.
+    const exact = P.enxerga === 'tudo';
+    if (exact) maxWorlds = 1;
     const team = game.players[seat].team;
     const vals = cands.map(() => []);
     let alive = cands.map((c, i) => i);
@@ -210,7 +237,7 @@ const GM = {
     AI.quiet++; // as jogadas imaginadas não entram nas explicações
     try {
       while (worlds < maxWorlds && alive.length > 1) {
-        for (const hidden of GM.sampleWorlds(game, seat, P.batch)) {
+        for (const hidden of GM.sampleWorlds(game, seat, exact ? 1 : P.batch)) {
           for (const i of alive) {
             const g = AI.imagine(game, hidden);
             apply(g, seat, cands[i]);
@@ -288,11 +315,16 @@ const GM = {
   summary(cands, kindText) {
     const fmt = (v) => (v >= 0 ? '+' : '') + Math.round(v);
     const shown = [...cands].sort((a, b) => b.avg - a.avg).slice(0, 6);
+    const exact = GM.PARAMS.enxerga === 'tudo';
+    const notas = `(vantagem ${exact ? '' : 'média '}da dupla, quanto maior melhor: ` +
+      `${shown.map((c) => `${c.label} ${fmt(c.avg)}`).join(', ')}).`;
+    if (exact) {
+      return `Comparou ${cands.length} ${kindText} vendo as cartas de todos e a ordem do monte (o nível Mestre trapaceia de propósito) ${notas}`;
+    }
     const elim = GM.stats.eliminated ? `, eliminou ${GM.stats.eliminated} cedo por serem claramente piores` : '';
     const inf = GM.PARAMS.beliefs ? ` Inferência: aproveitou ${Math.round(GM.stats.ess * 100)}% dos mundos sorteados ` +
       '(mundos que contradizem as recusas e os descartes dos adversários pesam menos).' : '';
-    return `Comparou ${cands.length} ${kindText} em ${GM.stats.worlds} mundos possíveis${elim} ` +
-      `(vantagem média da dupla, quanto maior melhor: ${shown.map((c) => `${c.label} ${fmt(c.avg)}`).join(', ')}).${inf}`;
+    return `Comparou ${cands.length} ${kindText} em ${GM.stats.worlds} mundos possíveis${elim} ${notas}${inf}`;
   },
 
   // ---------- 3. Decisões ----------

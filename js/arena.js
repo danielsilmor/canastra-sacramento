@@ -12,19 +12,20 @@
  */
 
 const Arena = {
-  // Os bots que podem entrar no torneio. "gm" muda parâmetros do Mestre (para medir cada parte).
+  // Os bots que podem entrar no torneio. "gm" muda parâmetros do motor do mestre.js (para medir cada parte).
   BOTS: {
     aleatorio: { label: 'Aleatório', random: true },
     iniciante: { label: 'Iniciante', level: 'iniciante' },
     moderado: { label: 'Moderado (regras)', level: 'moderado' },
     esperto: { label: 'Esperto (Monte Carlo)', level: 'esperto' },
-    mestre: { label: 'Mestre (completo)', level: 'mestre' },
-    'gm-sem-inferencia': { label: 'Mestre sem inferência', level: 'mestre', gm: { beliefs: false } },
-    'gm-com-baixadas': { label: 'Mestre com busca de baixadas', level: 'mestre', gm: { meldSearch: true } },
-    'gm-descarte-curto': { label: 'Mestre com descarte só entre 4', level: 'mestre', gm: { wideDiscard: false } },
-    'gm-vitoria': { label: 'Mestre jogando pela vitória', level: 'mestre', gm: { utility: 'vitoria' } },
-    'gm-sem-preferencia': { label: 'Mestre sem preferir as regras', level: 'mestre', gm: { preferZ: 0 } },
-    'gm-lixo-antigo': { label: 'Mestre com o jeito antigo de pegar o lixo', level: 'mestre', gm: { lixoNovo: false } },
+    mestre: { label: 'Estratégico (motor do Mestre, honesto)', level: 'mestre' },
+    vidente: { label: 'Mestre (vê as cartas escondidas)', level: 'vidente' },
+    'gm-sem-inferencia': { label: 'Estratégico sem inferência', level: 'mestre', gm: { beliefs: false } },
+    'gm-com-baixadas': { label: 'Estratégico com busca de baixadas', level: 'mestre', gm: { meldSearch: true } },
+    'gm-descarte-curto': { label: 'Estratégico com descarte só entre 4', level: 'mestre', gm: { wideDiscard: false } },
+    'gm-vitoria': { label: 'Estratégico jogando pela vitória', level: 'mestre', gm: { utility: 'vitoria' } },
+    'gm-sem-preferencia': { label: 'Estratégico sem preferir as regras', level: 'mestre', gm: { preferZ: 0 } },
+    'gm-lixo-antigo': { label: 'Estratégico com o jeito antigo de pegar o lixo', level: 'mestre', gm: { lixoNovo: false } },
   },
 
   // Gerador de números aleatórios com semente (mulberry32): a mesma semente dá o mesmo baralho.
@@ -95,7 +96,7 @@ const Arena = {
   // Joga uma vez do bot "spec" no lugar "seat".
   playTurn(g, seat, spec) {
     if (spec.random) return Arena.randomTurn(g, seat);
-    if (spec.level === 'mestre') Arena.configureGM(spec);
+    if (AI.LEVELS[spec.level] && AI.LEVELS[spec.level].engine === 'gm') Arena.configureGM(spec);
     AI.playTurnSync(g, seat, spec.level);
   },
 

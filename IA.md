@@ -6,7 +6,12 @@ e o que os testes mostraram. O nível mais forte é o **Mestre** (`js/mestre.js`
 > **Nomes dos níveis.** Durante os testes, o nível mais forte se chamava "Grão-Mestre" e o "Esperto" se chamava
 > "Estratégico". Havia também um "Mestre" (o Esperto com memória do lixo), que ficou praticamente empatado com o
 > Esperto (+54 ± 55) e foi **removido**; nas tabelas abaixo ele aparece como **Mestre antigo**.
-> Níveis atuais: Iniciante, Moderado, Esperto e Mestre.
+>
+> **Depois veio o nível que vê as cartas.** O motor do `js/mestre.js`, jogando honesto, passou a se chamar
+> **Estratégico** na tela (a chave interna continua `mestre`). O nome **Mestre** ficou para o mesmo motor
+> vendo as cartas escondidas (trapaça declarada, chave `vidente`; seção 2.10).
+> **Neste documento, "Mestre" é o motor honesto (hoje o Estratégico), a não ser na seção 2.10.**
+> Níveis atuais: Iniciante, Moderado, Esperto, Estratégico e Mestre.
 
 ## Resumo
 
@@ -22,6 +27,9 @@ e o que os testes mostraram. O nível mais forte é o **Mestre** (`js/mestre.js`
   juntar num jogo da mesa e fechar canastra, poupa curinga). **+37 ± 23 pontos por rodada** contra o Mestre sem
   ela, em 3.840 rodadas. Ver 2.9.
 - Custo: 0,23 s por jogada em média no jogo (máximo ~0,7 s); o Mestre antigo usa ~0,09 s.
+- **Nível Mestre (vê as cartas escondidas, trapaça declarada):** o mesmo motor com as mãos de todos e a ordem do
+  monte de verdade venceu o motor honesto (Estratégico) por **+250 ± 60 pontos por rodada** (640 rodadas; 62% das
+  rodadas contra 37%) e pensa quase na hora. Ver 2.10.
 
 ## 1. Análise do projeto
 
@@ -226,6 +234,34 @@ No Moderado (só para medir as partes, não foi adotado lá):
 A maior parte do ganho vem de **juntar com a nota nova junto com deixar passar o lixo pequeno ruim**; abrir com
 menos curingas quase não muda nada.
 
+### 2.10 Nível Mestre: vê as cartas escondidas (trapaça declarada)
+
+**Por quê:** para quem joga bem, o motor honesto (2.1 a 2.9, hoje o nível **Estratégico**) ficou fácil, e os jeitos
+honestos de deixá-lo mais forte já deram pouco (ver 4 e 5). A maior parte do esforço dele é adivinhar as cartas que
+não vê. Um nível que **vê as cartas** é o jeito mais barato de ter um adversário bem mais difícil.
+
+**Como funciona:** o mesmo motor, com `GM.PARAMS.enxerga = 'tudo'`, que vale só durante a vez desse nível
+(`AI.LEVELS.vidente.gm`, aplicado por `GM.turnSteps`). Em vez de sortear mundos (2.1), ele usa o mundo de verdade
+(`GM.realWorld`): as mãos dos outros e o monte na ordem real. Como as simulações (todos jogando como Moderado)
+não têm sorteio, **uma simulação por alternativa** basta (`GM.race` com 1 mundo): pensa quase na hora (~9 ms por
+jogada no torneio). As baixadas continuam pelas regras do Moderado.
+
+**O que foi testado** (torneios duplicados, escala 0,25, 640 rodadas cada):
+
+| Versão | Contra | Diferença por rodada | Rodadas vencidas | Decisão |
+|---|---|---|---|---|
+| vê só o monte (mãos dos outros sorteadas) | motor honesto | +183 ± 56 | 59% × 40% | não adotada |
+| **vê tudo (monte e mãos)** | motor honesto | **+250 ± 60** | 62% × 37% | **adotada: nível Mestre** |
+| vê tudo + busca nas baixadas (escolher onde baixar e onde pôr os curingas por simulação) | vê tudo | −84 ± 67 | 46% × 54% | descartada |
+
+A busca nas baixadas piora porque a simulação é curta (8 jogadas): nela, "baixar tudo" parece sempre melhor
+(pontos na mesa logo), mas deixa a mão vazia cedo e atrapalha pegar o lixo depois. Mesmo sem ela, o nível
+Mestre fez mais canastras limpas que o motor honesto (0,81 contra 0,63 por rodada), porque compra e descarta melhor.
+
+**Cuidados:** a página de conferir jogadas julga como se o bot não visse as cartas, então mostra um aviso nas
+jogadas do Mestre (uma jogada "pior" ali pode ter sido a certa). No modo online, o Mestre roda no navegador de
+quem criou a sala, que já tem todas as cartas.
+
 ## 3. Testes e validação
 
 ### 3.1 Como foi medido
@@ -286,12 +322,13 @@ entre elas é ruído. A final foi escolhida por ser ~25% mais rápida.
 
 ### 3.4 Testes automáticos (`tests.html`)
 
-105 testes, entre eles: duplicação exata do torneio; registro público (recusas e descartes); inferência (pares
+109 testes, entre eles: duplicação exata do torneio; registro público (recusas e descartes); inferência (pares
 para o topo do lixo, peso menor para mundos que contradizem uma recusa); a corrida elimina cedo uma alternativa
-claramente pior; o sorteio nunca põe 3 vermelho em mão imaginada; o Mestre joga uma rodada inteira sem
-erros e sem sumir carta; a regra nova do lixo (junta no 6♥ 7♥ 8♥ e fecha a canastra, deixa passar lixo pequeno
-ruim, abre o jogo pegando o lixo, vale só enquanto o Mestre pensa e o Moderado continua igual); partidas
-inteiras com todos os níveis juntos.
+claramente pior; o sorteio nunca põe 3 vermelho em mão imaginada; o Estratégico e o Mestre jogam uma rodada
+inteira sem erros e sem sumir carta; a regra nova do lixo (junta no 6♥ 7♥ 8♥ e fecha a canastra, deixa passar lixo
+pequeno ruim, abre o jogo pegando o lixo, vale só enquanto o motor pensa e o Moderado continua igual); o nível
+Mestre usa as mãos e o monte de verdade, só na vez dele e com uma simulação por opção; partidas inteiras com
+todos os níveis juntos.
 
 ## 4. Decisões técnicas e o que foi testado e descartado
 
@@ -308,6 +345,7 @@ inteiras com todos os níveis juntos.
 | Descer mais cedo (baixar logo as sequências de 3 cartas) | +7 ± 62 (640 rodadas) | descartado (empate) |
 | Segurar mais (guardar também as sequências de 4 cartas) | +16 ± 60 (640 rodadas) | descartado (empate) |
 | Pegar o lixo pela regra nova: compara todos os jeitos (juntar num jogo da mesa, fechar canastra, poupar curinga, deixar passar lixo pequeno ruim) | **+37 ± 23** contra o Mestre sem ela (3.840 rodadas); no Moderado, +33 ± 8 (20.000 rodadas) | **mantido, só no Mestre** (ver 2.9) |
+| Nível que vê as cartas escondidas: só o monte / tudo / tudo + busca nas baixadas | +183 ± 56 / **+250 ± 60** contra o motor honesto; a busca nas baixadas piorou (−84 ± 67) | **"vê tudo" adotado como nível Mestre**; o motor honesto virou Estratégico (ver 2.10) |
 | **Aprendizado de máquina** | não usado | regras ainda mudando; busca com inferência é mais barata, mede-se bem e explica as decisões |
 
 **Por que "preferir a regra"?** Com poucas centenas de simulações, a média de cada opção tem ruído; escolher

@@ -147,6 +147,7 @@
     }
     out.innerHTML = `<div class="bar"><div id="prog"></div></div><p class="note">${Analise.NOTA}</p>`;
     const parts = [];
+    if (Analise.aviso(j)) parts.push(`<p class="verdict">${esc(Analise.aviso(j))}</p>`);
     for (let d = 0; d < decs.length; d++) {
       const dec = decs[d];
       if (dec.nota) {

@@ -84,15 +84,18 @@ Cada bot pode ter um nível diferente. O nível aparece no quadro do jogador, ao
 | Nível | Como joga |
 |---|---|
 | **Iniciante** | Bom senso, mas comete erros de propósito: às vezes não pega o lixo, demora para baixar ou descarta uma carta útil. |
-| **Moderado** (padrão) | Abre o jogo gastando o mínimo de curingas: compara várias montagens (por exemplo, juntando os Ases numa sequência de Ases em vez de pôr um Ás na ponta de Q K A). Conta as cartas já presas em jogos na mesa para saber até onde cada jogo ainda pode crescer: não põe curinga em jogo com pouca chance de virar canastra, e uma carta que encaixa em dois jogos vai para o mais promissor. Não baixa uma sequência que vai disputar cartas com outra do mesmo naipe já na mesa (ex.: com 9♥ 10♥ J♥ Q♥ na mesa, guarda 4♥ 5♥ 6♥ na mão até chegarem 7♥ e 8♥). Prefere aumentar os jogos da mesa a baixar várias sequências pequenas (guarda trincas na mão para pegar o lixo). Guarda o coringão para fechar canastra com 6 cartas (em vez de pegar o lixo ou começar jogo novo com ele). Só fecha canastra com coringuinha se a dupla já tem uma limpa ou o monte está no fim, porque sem canastra limpa não dá para bater. Não fica com menos de 3 cartas na mão sem canastra limpa (senão fica "preso", sem conseguir baixar nem pegar o lixo). Descarta cartas baixas e só solta o Ás em último caso. Esperto e Mestre seguem essas mesmas regras ao baixar. |
+| **Moderado** (padrão) | Abre o jogo gastando o mínimo de curingas: compara várias montagens (por exemplo, juntando os Ases numa sequência de Ases em vez de pôr um Ás na ponta de Q K A). Conta as cartas já presas em jogos na mesa para saber até onde cada jogo ainda pode crescer: não põe curinga em jogo com pouca chance de virar canastra, e uma carta que encaixa em dois jogos vai para o mais promissor. Não baixa uma sequência que vai disputar cartas com outra do mesmo naipe já na mesa (ex.: com 9♥ 10♥ J♥ Q♥ na mesa, guarda 4♥ 5♥ 6♥ na mão até chegarem 7♥ e 8♥). Prefere aumentar os jogos da mesa a baixar várias sequências pequenas (guarda trincas na mão para pegar o lixo). Guarda o coringão para fechar canastra com 6 cartas (em vez de pegar o lixo ou começar jogo novo com ele). Só fecha canastra com coringuinha se a dupla já tem uma limpa ou o monte está no fim, porque sem canastra limpa não dá para bater. Não fica com menos de 3 cartas na mão sem canastra limpa (senão fica "preso", sem conseguir baixar nem pegar o lixo). Descarta cartas baixas e só solta o Ás em último caso. Esperto, Estratégico e Mestre seguem essas mesmas regras ao baixar. |
 | **Esperto** | Antes de comprar e de descartar, imagina dezenas de continuações da rodada para cada opção (sorteando as cartas que não vê) e escolhe a que rende mais pontos. Do lixo, só conhece a carta de cima. |
-| **Mestre** | O mais forte. Decora o lixo inteiro e as cartas que cada jogador pegou dele; deduz as cartas dos adversários pelo que eles fazem (quem recusa um lixo provavelmente não tinha par para ele; quem descarta uma carta provavelmente não tinha as vizinhas dela); compara **todas** as cartas no descarte e vários jeitos de pegar o lixo (prefere juntar num jogo da mesa, principalmente se fecha canastra, poupa curinga em jogo fraco ou que disputa cartas com outro do mesmo naipe e deixa passar lixo pequeno quando o jeito de pegar é ruim); elimina cedo as opções claramente piores e só troca a jogada das regras quando a vantagem é clara. Pensa cerca de 0,25 segundo por jogada. Nos torneios, venceu o Moderado por +394 pontos por rodada. |
+| **Estratégico** | O mais forte que joga limpo (até a versão anterior, se chamava Mestre). Decora o lixo inteiro e as cartas que cada jogador pegou dele; deduz as cartas dos adversários pelo que eles fazem (quem recusa um lixo provavelmente não tinha par para ele; quem descarta uma carta provavelmente não tinha as vizinhas dela); compara **todas** as cartas no descarte e vários jeitos de pegar o lixo (prefere juntar num jogo da mesa, principalmente se fecha canastra, poupa curinga em jogo fraco ou que disputa cartas com outro do mesmo naipe e deixa passar lixo pequeno quando o jeito de pegar é ruim); elimina cedo as opções claramente piores e só troca a jogada das regras quando a vantagem é clara. Pensa cerca de 0,25 segundo por jogada. Nos torneios, venceu o Moderado por +394 pontos por rodada. |
+| **Mestre** | O mais difícil, e **trapaceia de propósito**: vê as cartas de todos (inclusive as suas) e a ordem do monte. Pensa como o Estratégico, mas com as cartas de verdade: sabe quando vale pegar o lixo, nunca entrega o lixo que o próximo adversário quer e sabe quais sequências ainda conseguem virar canastra. Pensa quase na hora. Nos torneios, venceu o Estratégico por +250 pontos por rodada (62% das rodadas). Quando é seu parceiro, joga a seu favor. |
 
-Os níveis "Estratégico" e "Grão-Mestre" de versões anteriores agora se chamam **Esperto** e **Mestre**. O antigo
-"Mestre" (Estratégico com memória) foi removido: nos torneios ele ficou praticamente empatado com o Estratégico.
-Configurações salvas com os nomes antigos são convertidas sozinhas.
+Nomes de versões anteriores: o "Estratégico" mais antigo agora se chama **Esperto**; o "Grão-Mestre" virou "Mestre" e,
+depois, **Estratégico** (quando o Mestre que vê as cartas foi criado). O "Mestre" mais antigo (Esperto com memória) foi
+removido: nos torneios ele ficou praticamente empatado com o Esperto. Configurações salvas continuam com o mesmo bot:
+quem tinha escolhido o Mestre antigo passa a ver **Estratégico** (o mesmo jeito de jogar).
 
-Nenhum bot trapaceia: nenhum vê a sua mão, a mão dos outros ou a ordem do monte.
+Só o **Mestre** trapaceia (de propósito, para ser um desafio maior). Os outros níveis nunca veem a sua mão, a mão dos
+outros nem a ordem do monte.
 A arquitetura, as decisões técnicas e os resultados dos testes estão em **[IA.md](IA.md)**.
 
 ### Torneio de bots
@@ -106,7 +109,7 @@ canastras limpas, erros estratégicos e tempo por jogada.
 ### Modo depuração
 
 Na engrenagem, em **Depuração**, há duas opções (desligadas por padrão):
-- **Explicar as decisões dos bots:** cada jogada de bot ganha um **"Por quê?"** no quadro da jogada e no histórico, com o motivo de cada decisão: por que comprou do monte ou pegou o lixo, como abriu, por que guardou ou baixou uma sequência, onde pôs o curinga e por que descartou aquela carta (com as próximas opções). Nos níveis Esperto e Mestre aparece também o resultado médio das jogadas que ele imaginou para cada opção (no Mestre, também quantas opções ele eliminou cedo e quanto a inferência aproveitou dos mundos sorteados).
+- **Explicar as decisões dos bots:** cada jogada de bot ganha um **"Por quê?"** no quadro da jogada e no histórico, com o motivo de cada decisão: por que comprou do monte ou pegou o lixo, como abriu, por que guardou ou baixou uma sequência, onde pôs o curinga e por que descartou aquela carta (com as próximas opções). Nos níveis Esperto, Estratégico e Mestre aparece também o resultado das jogadas que ele imaginou para cada opção (no Estratégico, também quantas opções ele eliminou cedo e quanto a inferência aproveitou dos mundos sorteados; no Mestre, o aviso de que ele vê as cartas).
 - **Mostrar as cartas dos bots:** as mãos dos bots aparecem viradas para cima no quadro de cada um, para conferir se as decisões fazem sentido.
 
 As explicações usam só o que o bot sabe de verdade; mostrar as cartas é só para você estudar as jogadas.
@@ -147,7 +150,7 @@ jogada, o monte, o lixo, os jogos na mesa, o que foi feito e o motivo de cada bo
 | `js/rules.js` | As regras: o que é sequência válida, abertura, canastra, pontuação. |
 | `js/game.js` | A partida: distribuição, vez de cada um, compra, lixo, descarte, fim da rodada, placar. |
 | `js/ai.js` | Como os bots jogam: Iniciante, Moderado e Esperto, e as ferramentas de simulação. |
-| `js/mestre.js` | O Mestre (módulo independente): inferência, Monte Carlo adaptativo e decisões. |
+| `js/mestre.js` | O motor do Estratégico e do Mestre (módulo independente): inferência, Monte Carlo adaptativo e decisões; o Mestre usa as cartas de verdade em vez de adivinhar. |
 | `js/arena.js` | Torneios entre bots: partidas duplicadas, medidas e estatística. |
 | `js/ui.js` | Desenha a mesa e responde aos seus cliques. |
 | `js/historico.js` | Grava a partida jogada por jogada (para conferir depois) e baixa o histórico. |

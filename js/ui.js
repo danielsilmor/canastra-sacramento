@@ -1561,6 +1561,8 @@ const UI = {
     this.pace = PACE[s.pace] ? s.pace : d.pace;
     // Nomes antigos dos níveis: "Estratégico" (e "Atento") virou "Esperto"; "Grão-Mestre" virou "Mestre"
     // (o Mestre antigo foi removido e quem o usava passa para o novo Mestre).
+    // Depois, a chave "mestre" passou a se chamar Estratégico na tela, e o Mestre que vê as cartas
+    // ganhou a chave "vidente": quem tinha "mestre" guardado continua com o mesmo bot, agora Estratégico.
     const renamed = { estrategico: 'esperto', atento: 'esperto', graomestre: 'mestre' };
     for (const seat of [1, 2, 3]) {
       const saved = s.levels && (renamed[s.levels[seat]] || s.levels[seat]);
@@ -1605,11 +1607,15 @@ const UI = {
       iniciante: 'Joga com bom senso, mas comete alguns erros: às vezes não pega o lixo, demora para baixar ou descarta uma carta útil.',
       moderado: 'Abre gastando o mínimo de curingas, prefere aumentar os jogos da mesa a baixar várias sequências pequenas, guarda o coringão para fechar canastra, só usa o coringuinha para fechar canastra se a dupla já tem uma limpa, conta as cartas já usadas na mesa para não pôr curinga em jogo com pouca chance de canastra, não baixa uma sequência que vai disputar cartas com outra do mesmo naipe já na mesa (guarda para aumentar a que existe), não fica com menos de 3 cartas sem canastra limpa, descarta cartas baixas e só solta o Ás em último caso.',
       esperto: 'Antes de comprar e de descartar, imagina várias continuações da rodada para cada opção e escolhe a que rende mais pontos. Do lixo, só conhece a carta de cima.',
-      mestre: 'O mais forte. Decora o lixo inteiro e as cartas que cada jogador pegou dele, deduz as cartas dos ' +
+      mestre: 'O mais forte que joga limpo. Decora o lixo inteiro e as cartas que cada jogador pegou dele, deduz as cartas dos ' +
         'adversários pelo que eles fazem (quem recusa um lixo provavelmente não tinha par para ele), compara todos ' +
         'os descartes e vários jeitos de pegar o lixo (prefere juntar num jogo da mesa e fechar canastra, poupando ' +
         'curinga), elimina cedo as opções claramente piores e só troca a jogada ' +
-        'das regras quando a vantagem é clara. Pensa um pouco mais por jogada.',
+        'das regras quando a vantagem é clara. Pensa um pouco mais por jogada. (Até a versão anterior, este era o Mestre.)',
+      vidente: 'O mais difícil, e trapaceia de propósito: vê as cartas de todos (inclusive as suas) e a ordem do monte. ' +
+        'Pensa como o Estratégico, mas com as cartas de verdade: sabe quando vale pegar o lixo, nunca entrega o lixo ' +
+        'que o próximo adversário quer e sabe quais sequências ainda conseguem virar canastra. Nos torneios, ' +
+        'venceu o Estratégico por cerca de 250 pontos por rodada. Quando é seu parceiro, joga a seu favor.',
     };
     const options = (list, current) => list
       .map(([value, label]) => `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`).join('');

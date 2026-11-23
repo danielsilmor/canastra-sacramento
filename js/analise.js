@@ -4,8 +4,8 @@
  * Para cada decisão de uma jogada (compra, baixadas e descarte), monta a mesa exatamente como
  * estava e compara a opção escolhida com as alternativas. Cada opção é jogada nos mesmos
  * "mundos possíveis": as cartas que o jogador da vez não via são sorteadas (pesadas pelo que
- * os adversários fizeram, como faz o Mestre) e a rodada continua por algumas jogadas.
- * Usa só o que o jogador da vez sabia. É o mesmo tipo de conta do Mestre, com muito mais mundos.
+ * os adversários fizeram, como faz o Estratégico) e a rodada continua por algumas jogadas.
+ * Usa só o que o jogador da vez sabia. É o mesmo tipo de conta do Estratégico, com muito mais mundos.
  */
 
 const Analise = {
@@ -274,6 +274,7 @@ const Analise = {
       return `Não deu para conferir a jogada ${j.n}: ${e.message}`;
     }
     if (!decs.length) return 'Nada a conferir nesta jogada.';
+    if (this.aviso(j)) L.push(this.aviso(j));
     for (const dec of decs) {
       if (dec.nota) {
         L.push(`${dec.tipo}: ${dec.nota}`);
@@ -287,9 +288,17 @@ const Analise = {
     return L.join('\n\n');
   },
 
+  // O nível Mestre vê as cartas escondidas: a conferência não sabe disso e o julga como os outros.
+  aviso(j) {
+    if (j.nivel !== 'vidente') return '';
+    return 'Atenção: o Mestre vê as cartas de todos e a ordem do monte. A conferência sorteia as cartas ' +
+      'escondidas, como se ele não visse; por isso uma jogada dele que apareça aqui como pior pode ter sido ' +
+      'a certa para as cartas de verdade.';
+  },
+
   NOTA: 'Como ler: para cada opção, a mesa foi jogada em vários "mundos possíveis" (as cartas escondidas ' +
     'sorteadas entre as que o jogador não via) por mais algumas jogadas. "Média" = vantagem da dupla ' +
     'no placar ao fim dessas jogadas. "Diferença" = quanto a opção rende a mais (+) ou a menos (−) que a ' +
-    'jogada feita, nos mesmos mundos, com a margem de erro de 95%. É o mesmo tipo de conta do Mestre, ' +
+    'jogada feita, nos mesmos mundos, com a margem de erro de 95%. É o mesmo tipo de conta do Estratégico, ' +
     'com bem mais mundos: é uma boa referência, não uma verdade absoluta.',
 };

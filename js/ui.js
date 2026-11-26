@@ -126,13 +126,68 @@ const UI = {
     $('modal').onclick = (e) => {
       if (e.target.id === 'modal' && this.modalClosable) this.hideModal();
     };
+    $('btn-home').onclick = () => Online.voltarAoInicio();
     document.addEventListener('keydown', (e) => {
       if ((e.key === 'Enter' || e.key === ' ') && this.confirmResolve && e.target.tagName !== 'SELECT') {
         e.preventDefault();
         this.confirmResolve();
       }
     });
-    this.newMatch();
+    Online.inicio(); // tela inicial: jogar sozinho ou online
+  },
+
+  // Interrompe a partida em andamento (animações e jogadas dos bots), sem começar outra.
+  stopMatch() {
+    this.token++;
+    if (this.confirmResolve) this.confirmResolve();
+    this.confirmResolve = null;
+    this.busy = false;
+    this.hideModal();
+  },
+
+  // ---------- Modo online ----------
+  // A tela mostra a cópia da mesa montada pelo espelho.js (você no lugar 0). Os personagens e
+  // os níveis dos bots vêm da sala; os do jogo sozinho ficam guardados para quando você voltar.
+  online: false,
+  onlineLevels: {},
+
+  entrarNoOnline(game, characters, levels) {
+    this.stopMatch();
+    if (!this.online) this.soloCharacters = this.characters;
+    this.online = true;
+    document.body.classList.add('online');
+    this.game = game;
+    this.characters = characters;
+    this.onlineLevels = levels;
+    this.eventCursor = 0;
+    this.logCursor = 0;
+    this.selected.clear();
+    this.staging = null;
+    this.freshIds = new Set();
+    this.narration = null;
+    this.view = null;
+    this.actorTurn = null;
+    this.say('Partida online! Cada um joga do seu navegador; os bots jogam no navegador de quem criou a sala.');
+  },
+
+  sairDoOnline() {
+    if (!this.online) return;
+    this.stopMatch();
+    this.online = false;
+    document.body.classList.remove('online');
+    if (this.soloCharacters) this.characters = this.soloCharacters;
+    this.game = null;
+    this.narration = null;
+  },
+
+  // Nível do bot no lugar "seat" (no online, o que quem criou a sala escolheu; pessoas não têm nível).
+  levelOf(seat) {
+    return this.online ? this.onlineLevels[seat] : this.levels[seat];
+  },
+
+  // Ritmo das animações. No online não existe o "passo a passo" (a mesa anda sozinha).
+  get ritmo() {
+    return this.online && this.pace === 'step' ? 'normal' : this.pace;
   },
 
   newMatch() {
@@ -178,7 +233,7 @@ const UI = {
   // Por que o jogador não pode agir agora? (null = pode agir)
   notMyTurnReason() {
     const g = this.game;
-    const step = this.pace === 'step';
+    const step = this.ritmo === 'step';
     // Esperando o "Continuar" (modo passo a passo): diz isso primeiro.
     if (this.confirmResolve) {
       return 'Ainda não é a sua vez. Clique em "Continuar" (ou aperte Enter) para seguir as jogadas.';
@@ -193,6 +248,7 @@ const UI = {
       return `Ainda não é a sua vez. Aguarde ${g.players[g.current].name} jogar` +
         (step ? ' e depois clique em "Continuar".' : '.');
     }
+    if (this.online && Espelho.pendente) return 'Aguarde um instante: a sua jogada está chegando na mesa.';
     if (this.busy) return 'Aguarde um instante, a jogada ainda está acontecendo.';
     return null;
   },
@@ -212,6 +268,7 @@ const UI = {
   // Papel de cada lugar, no feminino ou masculino conforme o personagem sorteado.
   roleOf(seat) {
     if (seat === 0) return 'você';
+    if (this.characters[seat].humano) return seat === 2 ? 'sua dupla' : 'adversário';
     const f = this.characters[seat].female;
     if (seat === 2) return f ? 'sua parceira' : 'seu parceiro';
     return f ? 'adversária' : 'adversário';
@@ -219,7 +276,10 @@ const UI = {
   // Foto redonda do personagem do bot.
   avatarHtml(seat, cls = '') {
     const c = this.characters[seat];
-    return seat && c ? `<img class="avatar ${cls}" src="${c.img}" alt="" draggable="false">` : '';
+    if (!seat || !c) return '';
+    // Pessoa no modo online: a inicial do nome num círculo.
+    if (!c.img) return `<span class="avatar letra ${cls}">${esc([...c.name][0].toUpperCase())}</span>`;
+    return `<img class="avatar ${cls}" src="${c.img}" alt="" draggable="false">`;
   },
   get myTeam() {
     return this.game.teams[0];
@@ -301,14 +361,14 @@ const UI = {
 
   // Anima um evento do jogo, usando as posições guardadas antes da jogada.
   async animateEvent(ev, snap) {
-    const dur = 480 * PACE[this.pace].anim;
+    const dur = 480 * PACE[this.ritmo].anim;
     let cards;
     if (ev.type === 'pickup') cards = ev.pile;
     else if (ev.cards) cards = ev.cards;
     else if (ev.card) cards = [ev.card];
     else return;
     const flights = cards.map(async (card, i) => {
-      await sleep(i * 70 * PACE[this.pace].anim);
+      await sleep(i * 70 * PACE[this.ritmo].anim);
       const from =
         snap.cards.get(String(card.id)) ||
         (ev.type === 'draw' ? snap.stock : ev.type === 'pickup' ? snap.discard : this.seatRect(ev.seat));
@@ -341,10 +401,10 @@ const UI = {
   // Espera o jogador confirmar (passo a passo) ou uma pausa (automático).
   async confirmStep(lines, token, why = []) {
     if (!lines.length) return;
-    this.narration = { text: lines.join('\n'), waiting: this.pace === 'step', actor: this.actorSeat, why };
+    this.narration = { text: lines.join('\n'), waiting: this.ritmo === 'step', actor: this.actorSeat, why };
     this.render();
-    if (this.pace === 'step') await new Promise((resolve) => (this.confirmResolve = resolve));
-    else await sleep(PACE[this.pace].wait);
+    if (this.ritmo === 'step') await new Promise((resolve) => (this.confirmResolve = resolve));
+    else await sleep(PACE[this.ritmo].wait);
     this.confirmResolve = null;
     if (token !== this.token) throw CANCELLED;
     this.narration.waiting = false;
@@ -368,7 +428,7 @@ const UI = {
     this.render();
     try {
       // Distribuição: uma carta por vez, começando à direita do carteador.
-      const pace = PACE[this.pace].anim;
+      const pace = PACE[this.ritmo].anim;
       const flights = [];
       for (let i = 0; i < 15; i++) {
         for (let k = 1; k <= 4; k++) {
@@ -416,7 +476,7 @@ const UI = {
           i++;
         }
         lines.push(text + '.');
-        await sleep(300 * PACE[this.pace].anim);
+        await sleep(300 * PACE[this.ritmo].anim);
         if (token !== this.token) throw CANCELLED;
       }
       if (lines.length) await this.confirmStep(lines, token);
@@ -437,6 +497,7 @@ const UI = {
     if (ev.type === 'redThree') {
       const idx = hand.findIndex((c) => c.id === ev.card.id);
       if (idx >= 0) hand.splice(idx, 1);
+      else if (ev.seat !== 0) hand.pop(); // online: as cartas dos outros são viradas (sem id de verdade)
       this.view.red[ev.seat % 2].push(ev.card);
     } else if (ev.type === 'draw') {
       hand.push(ev.card);
@@ -447,12 +508,21 @@ const UI = {
   // ---------- Ações do jogador ----------
 
   // Executa uma ação do jogador: guarda posições, aplica, anima e segue o jogo.
+  // "successText" pode ser uma função (o texto depende do resultado, ex.: a carta comprada).
   async perform(action, successText) {
     const snap = this.snapshot();
     const r = action();
     if (!r.ok) return this.error(r.error);
     this.selected.clear();
-    if (successText) this.say(successText, 'ok');
+    if (r.pending) {
+      // Online: a jogada foi para a mesa; o resultado (e a animação) chega na próxima atualização.
+      this.busy = true;
+      if (Espelho.pendente) Espelho.pendente.texto = successText;
+      this.render();
+      return;
+    }
+    const text = typeof successText === 'function' ? successText() : successText;
+    if (text) this.say(text, 'ok');
     this.busy = true;
     const lines = await this.playNewEvents(snap);
     this.narration = { text: lines.join('\n'), waiting: false };
@@ -468,20 +538,19 @@ const UI = {
       return this.error('Você está usando o lixo. Para comprar do monte, clique em "Desfazer" no jogo que tem a carta do lixo.');
     }
     // Primeiro a jogar: a carta que vai sair do monte (para explicar se não puder trocar).
-    const first = g.isFirstTurn ? g.stock[g.stock.length - 1] : null;
-    this.perform(() => {
-      const r = g.drawFromStock(0);
-      if (!r.ok) return r;
+    // No online o monte é virado: a explicação usa a carta que chegou.
+    const first = g.isFirstTurn && !this.online ? g.stock[g.stock.length - 1] : null;
+    this.perform(() => g.drawFromStock(0), () => {
       const newCards = [...g.turn.newIds].map((id) => cardName(this.cardById(id))).join(', ');
       let text = g.turn.canSecondDraw
         ? `Você comprou ${newCards}. Como é o primeiro a jogar, se não quiser essa carta clique em "Trocar carta" ou jogue a carta no lixo: ela vai para o lixo e você compra outra.`
         : `Você comprou ${newCards}. Baixe sequências, se quiser, e depois descarte 1 carta.`;
-      if (first && (isThree(first) || isWild(first))) {
-        const what = isThree(first) ? 'um 3' : isJoker(first) ? 'um coringão' : 'um 2';
+      const c = first || (g.isFirstTurn && g.turn.newIds.size === 1 ? this.cardById([...g.turn.newIds][0]) : null);
+      if (c && (isThree(c) || isWild(c))) {
+        const what = isThree(c) ? 'um 3' : isJoker(c) ? 'um coringão' : 'um 2';
         text += ` Veio ${what}, então não dá para trocar de carta.`;
       }
-      this.say(text, 'ok');
-      return r;
+      return text;
     });
   },
 
@@ -492,13 +561,9 @@ const UI = {
       return this.error(`${cardName(this.cardById(g.turn.firstCardId))} está na área amarela. ` +
         'Clique em "Desfazer" no jogo dela antes de trocar a carta.');
     }
-    this.perform(() => {
-      const r = g.secondDraw(0);
-      if (r.ok) {
-        const newCards = [...g.turn.newIds].map((id) => cardName(this.cardById(id))).join(', ');
-        this.say(`Você trocou de carta e recebeu ${newCards}.`, 'ok');
-      }
-      return r;
+    this.perform(() => g.secondDraw(0), () => {
+      const newCards = [...g.turn.newIds].map((id) => cardName(this.cardById(id))).join(', ');
+      return `Você trocou de carta e recebeu ${newCards}.`;
     });
   },
 
@@ -892,6 +957,16 @@ const UI = {
     const g = this.game;
     this.render();
     if (g.phase === 'roundEnd') return this.showRoundEnd();
+    if (this.online) {
+      // Online: os outros jogam nos navegadores deles (e os bots no de quem criou a sala).
+      if (g.current === 0 && g.phase === 'draw' && !this.msg.text.startsWith('Você comprou')) {
+        this.say(g.stock.length
+          ? 'Sua vez! Compre do monte ou pegue o lixo.'
+          : 'O monte acabou! Você pode pegar o lixo (se conseguir usar a carta do topo) ou encerrar a rodada.');
+        this.render();
+      }
+      return;
+    }
     if (g.current !== 0) this.runBots();
     else if (g.phase === 'draw' && !this.msg.text.startsWith('Você comprou')) {
       this.say(g.stock.length
@@ -1030,10 +1105,10 @@ const UI = {
     const n = this.handOf(seat).length;
     el.innerHTML = this.avatarHtml(seat) +
       `<div class="info"><div class="top"><span class="name">${p.name}</span>${dealer}<span class="role"><span class="role-name">${this.roleOf(seat)}</span>` +
-      `${seat ? ` · ${AI.LEVELS[this.levels[seat]].label}` : ''}</span>${playing}</div>` +
+      `${seat && this.levelOf(seat) ? ` · ${AI.LEVELS[this.levelOf(seat)].label}` : ''}</span>${playing}</div>` +
       `<div class="mid"><div class="stack"></div><span class="count">${n}</span><span class="unit">cartas</span></div>` +
-      // Modo depuração: as cartas do bot viradas para cima.
-      (this.showBotCards && seat && n
+      // Modo depuração: as cartas do bot viradas para cima (só no jogo sozinho).
+      (this.showBotCards && !this.online && seat && n
         ? `<div class="bot-hand" title="Cartas de ${p.name} (modo depuração)">${cardTagsHtml(sortHand(this.handOf(seat)).map(cardName).join(' '))}</div>`
         : '') +
       '</div>';
@@ -1233,7 +1308,7 @@ const UI = {
       label = `Rodada ${g.round}`;
       who = 'Distribuindo';
     } else if (this.narration && this.narration.actor != null) {
-      label = `Jogada ${this.actorTurn} de`;
+      label = this.actorTurn ? `Jogada ${this.actorTurn} de` : 'Jogada de';
       who = this.avatarHtml(this.narration.actor, 'narr') + g.players[this.narration.actor].name;
     } else if (g.phase === 'roundEnd') {
       label = `Rodada ${g.round}`;
@@ -1248,7 +1323,7 @@ const UI = {
     }
     box.innerHTML = `<div class="label">${label}</div><div class="who ${mine ? 'mine' : ''}">${who}</div>`;
     // Jogada de bot: botão para marcá-la como duvidosa (para conferir depois).
-    const j = this.narration && this.narration.actor != null ? Historico.buscar(this.actorTurn) : null;
+    const j = !this.online && this.narration && this.narration.actor != null ? Historico.buscar(this.actorTurn) : null;
     if (j) {
       const b = document.createElement('button');
       b.className = 'narr-flag' + (j.marcada ? ' on' : '');
@@ -1620,8 +1695,10 @@ const UI = {
     const options = (list, current) => list
       .map(([value, label]) => `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`).join('');
     const levelList = Object.entries(AI.LEVELS).filter(([, v]) => !v.hidden).map(([k, v]) => [k, v.label]);
-    // Bots na ordem em que jogam (lugares 1, 2 e 3).
-    const bots = [1, 2, 3].map((seat) => `
+    // Bots na ordem em que jogam (lugares 1, 2 e 3). No online, quem escolhe é quem criou a sala.
+    const bots = this.online
+      ? '<p class="set-note">No modo online, o nível de cada bot é escolhido por quem criou a sala, antes de a partida começar.</p>'
+      : [1, 2, 3].map((seat) => `
       <div class="set-row">
         ${this.avatarHtml(seat, 'small')}<div class="set-who"><b>${this.game.players[seat].name}</b><span>${this.roleOf(seat)}</span></div>
         <select data-seat="${seat}">${options(levelList, this.levels[seat])}</select>
@@ -1773,6 +1850,27 @@ const UI = {
     $('btn-arr-cancel').onclick = () => this.hideModal();
   },
 
+  // Online: quem ainda não clicou em "Próxima rodada" (na janela de pontuação).
+  updateReady() {
+    const info = $('ready-info');
+    const btn = $('btn-modal-next');
+    if (!info || !btn || !this.online || this.game.matchOver) {
+      if (info && this.game && this.game.matchOver) {
+        info.textContent = Espelho.anfitriao ? 'Em "Voltar à sala", todos voltam para a sala e dá para jogar de novo.'
+          : `Para jogar de novo, espere ${Espelho.sala.criador.nome} voltar à sala (ou clique em "Sair da sala").`;
+      }
+      return;
+    }
+    const { faltam, eu } = Espelho.prontos();
+    if (eu || Espelho.pendente) {
+      btn.disabled = true;
+      btn.textContent = 'Esperando os outros…';
+    }
+    info.textContent = faltam.length
+      ? `A próxima rodada começa quando todos clicarem em "Próxima rodada". Falta${faltam.length > 1 ? 'm' : ''}: ${faltam.join(', ')}.`
+      : 'Começando a próxima rodada…';
+  },
+
   showRoundEnd() {
     const g = this.game;
     const lr = g.lastRound;
@@ -1822,12 +1920,24 @@ const UI = {
         <summary title="Clique para ver ou esconder as cartas">Cartas que ficaram na mão <span class="count">${handsCount}</span></summary>
         <ul class="hands">${hands}</ul>
       </details>
+      ${this.online ? '<p class="set-note" id="ready-info"></p>' : ''}
       <div class="modal-actions">
         <button class="btn-light" id="btn-modal-close">Ver a mesa</button>
-        <button class="btn-primary" id="btn-modal-next">${g.matchOver ? 'Nova partida' : 'Próxima rodada'}</button>
+        <button class="btn-primary" id="btn-modal-next">${!g.matchOver ? 'Próxima rodada'
+          : !this.online ? 'Nova partida' : Espelho.anfitriao ? 'Voltar à sala' : 'Sair da sala'}</button>
       </div>`;
     this.showModal(html, true);
     $('btn-modal-close').onclick = () => this.hideModal();
+    if (this.online) {
+      // Online: a próxima rodada começa quando todas as pessoas clicarem.
+      $('btn-modal-next').onclick = () => {
+        if (g.matchOver) return Espelho.anfitriao ? Online.voltarASala() : Online.sairDaPartida();
+        Espelho.pronto();
+        this.updateReady();
+      };
+      this.updateReady();
+      return;
+    }
     $('btn-modal-next').onclick = () => {
       if (g.matchOver) return this.newMatch();
       this.hideModal();

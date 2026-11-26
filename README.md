@@ -6,7 +6,31 @@ Você joga em dupla com um bot (computador) contra outros dois bots. Os bots sã
 ## Jogar online
 
 O jogo está publicado em **https://danielsilmor.github.io/canastra-sacramento/**
-(abre no computador e no celular, sem instalar nada). Cada pessoa joga sozinha contra os bots, no próprio navegador.
+(abre no computador e no celular, sem instalar nada). Ao abrir, a tela inicial tem duas opções:
+**Jogar sozinho** (você e três bots, no seu navegador) e **Jogar online** (com outras pessoas).
+
+### Modo online (multiplayer)
+
+- **Nome:** cada pessoa digita um nome, sem senha. O nome não pode repetir (acento, maiúscula e espaço a mais não
+  contam) e fica livre de novo quando a pessoa sai.
+- **Salas:** dá para buscar uma sala pelo nome ou criar uma (basta dar um nome).
+- **Mesa redonda:** na sala, cada um escolhe a cadeira. Quem senta à frente é a sua dupla; quem senta dos lados,
+  adversário. Cadeira sem pessoa fica com um bot; quem criou a sala (★) escolhe o nível de cada bot e começa a
+  partida, que precisa de pelo menos 2 pessoas sentadas (quem criou também precisa sentar).
+- **Partida:** cada um vê a mesa do seu lado (você embaixo) e só a própria mão. O carteador da primeira rodada é
+  sorteado e passa para o seguinte a cada rodada. A próxima rodada começa quando todos clicam em "Próxima rodada".
+  No fim da partida, quem criou a sala pode voltar todos para a sala e jogar de novo.
+- **Quem comanda a mesa:** o navegador de quem criou a sala embaralha, distribui, confere as jogadas e joga pelos
+  bots. A mão dos bots e o monte nunca saem desse navegador; cada pessoa recebe só as próprias cartas.
+  Se quem criou a sala sair, a partida termina para todos. Se outra pessoa sair (ou a internet dela cair), um bot
+  assume o lugar dela até o fim.
+- **Infraestrutura (gratuita):** o site continua no GitHub Pages; os jogadores se encontram pelo **Firebase**
+  (Google, plano gratuito Spark: banco de dados em tempo real + entrada anônima, sem cartão). O endereço do banco
+  fica em `js/firebase-config.js` e as regras de segurança (quem pode ler e gravar cada parte) em
+  `firebase-regras.json`, que são coladas no console do Firebase. Limite do plano gratuito: 100 conexões ao mesmo
+  tempo (cerca de 25 mesas cheias).
+- **Para testar sem o Firebase:** abra `index.html?rede=memoria`: o modo online usa um banco de mentira, só nesta
+  página (serve para ver as telas; os testes automáticos simulam várias pessoas assim).
 
 O código fica em https://github.com/danielsilmor/canastra-sacramento (público).
 A pasta `_material` (imagens de referência e anotações) **não** vai para a internet: ela está listada no arquivo `.gitignore`.
@@ -34,7 +58,8 @@ Opcional, para quem quiser mexer no código:
 ## Como jogar
 
 1. Abra a pasta `Canastra Sacramento`.
-2. Dê dois cliques em **`index.html`**. O jogo abre no navegador e a primeira rodada começa sozinha.
+2. Dê dois cliques em **`index.html`**. O jogo abre no navegador, na tela inicial: clique em **Jogar sozinho**
+   e a primeira rodada começa. O botão da casinha, no alto da mesa, volta para a tela inicial.
 
 Na sua vez:
 1. **Comprar:** clique no **monte** (ou arraste o monte para a sua mão, ou use o botão "Comprar do monte").
@@ -153,6 +178,12 @@ jogada, o monte, o lixo, os jogos na mesa, o que foi feito e o motivo de cada bo
 | `js/mestre.js` | O motor do Estratégico e do Mestre (módulo independente): inferência, Monte Carlo adaptativo e decisões; o Mestre usa as cartas de verdade em vez de adivinhar. |
 | `js/arena.js` | Torneios entre bots: partidas duplicadas, medidas e estatística. |
 | `js/ui.js` | Desenha a mesa e responde aos seus cliques. |
+| `js/online.js` | Tela inicial (jogar sozinho ou online) e telas do online: nome, salas e mesa redonda. |
+| `js/rede.js` | Conexão com o banco online (Firebase): nomes, salas e cadeiras. Tem também um banco "de mentira" para os testes. |
+| `js/mesa.js` | A partida online no navegador de quem criou a sala: confere as jogadas, joga pelos bots e publica a mesa. |
+| `js/espelho.js` | A partida online vista por cada pessoa: monta a mesa do lado dela, só com a mão dela, e envia as jogadas. |
+| `js/firebase-config.js` | O endereço do banco do Firebase (copiado do console do Firebase). |
+| `firebase-regras.json` | Regras de segurança do banco (colar no console do Firebase, em Realtime Database → Regras). |
 | `js/historico.js` | Grava a partida jogada por jogada (para conferir depois) e baixa o histórico. |
 | `js/analise.js` | Reconstrói uma jogada gravada e compara a decisão com as alternativas. |
 | `torneio.html` | Página para rodar torneios entre bots. |

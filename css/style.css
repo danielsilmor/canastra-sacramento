@@ -281,6 +281,21 @@ button.btn-gear:hover svg { transform: rotate(60deg); }
 }
 .avatar.narr { height: 40px; }
 .avatar.small { height: 42px; }
+/* Pessoa no modo online: a inicial do nome num círculo, no lugar da foto */
+.avatar.letra {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 600;
+  filter: none;
+}
+.avatar.letra.narr, .avatar.letra.small { font-size: 17px; }
+body.online #btn-new { display: none; } /* no online, a partida é da sala */
 .player .info { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
 .player:has(.avatar) { flex-direction: row; align-items: flex-end; gap: 12px; }
 /* No quadro do jogador, a base da foto fica alinhada com a base das cartas */
@@ -648,6 +663,156 @@ button.meld-undo:hover:not(:disabled) { background: var(--surface-3); color: var
 .modal-box .set-help { margin-top: 10px; }
 .modal-box .set-help ul { margin: 10px 0 0; padding-left: 18px; }
 .modal-box .set-help li { margin-bottom: 8px; }
+
+/* ---------- Tela inicial e modo online (por cima da mesa) ---------- */
+.telas {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  background: var(--bg);
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 40px 16px;
+}
+.telas.hidden { display: none; }
+body.com-tela { overflow: hidden; } /* a mesa por trás não rola enquanto uma tela está aberta */
+.tela-caixa { width: 100%; max-width: 440px; margin: auto 0; display: flex; flex-direction: column; gap: 14px; }
+.tela-caixa.larga { max-width: 620px; }
+.tela-caixa.tela-inicio { align-items: center; text-align: center; gap: 36px; }
+.tela-logo { height: 84px; width: auto; }
+.menu { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+button.menu-op {
+  height: auto;
+  padding: 18px 22px;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+}
+button.menu-op b { font-size: 18px; font-weight: 600; }
+button.menu-op span { font-size: 14px; font-weight: 400; color: var(--muted); }
+button.menu-op.btn-primary span { color: #48484a; }
+.telas h2 { margin: 6px 0 0; font-size: 26px; font-weight: 600; letter-spacing: -0.4px; }
+.telas h3 { margin: 10px 0 0; font-size: 15px; font-weight: 600; }
+.telas p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.telas p b { color: var(--text-2); font-weight: 600; }
+.telas a { color: var(--text-2); }
+.tela-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+button.tela-voltar { height: 36px; border-radius: 12px; padding: 0 14px; font-size: 14px; color: var(--text-2); }
+.tela-eu { font-size: 14px; color: var(--muted); }
+.tela-eu b { color: var(--text); font-weight: 600; }
+.telas p.tela-erro { color: var(--danger); min-height: 21px; }
+.linha-form { display: flex; gap: 10px; }
+.linha-form input { flex: 1; }
+.telas input {
+  min-width: 0;
+  flex-shrink: 0;
+  height: 46px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  padding: 0 16px;
+  outline: none;
+}
+.telas input:focus { border-color: var(--muted-2); }
+.telas input::placeholder { color: var(--muted-2); }
+
+/* Lista de salas */
+.lista-salas { display: flex; flex-direction: column; gap: 8px; }
+.sala-item { display: flex; align-items: center; gap: 14px; background: var(--surface); border-radius: 16px; padding: 12px 12px 12px 18px; }
+.sala-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sala-info b { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sala-info span { font-size: 13px; color: var(--muted); }
+.sala-pontos { display: flex; gap: 4px; }
+.sala-pontos i { width: 9px; height: 9px; border-radius: 50%; background: var(--surface-3); }
+.sala-pontos i.on { background: var(--green); }
+.sala-item button { height: 38px; border-radius: 12px; background: var(--surface-2); }
+.sala-item button:hover:not(:disabled) { background: var(--surface-3); }
+.telas p.vazio { text-align: center; padding: 22px 0; background: var(--surface); border-radius: 16px; }
+
+/* Sala: mesa redonda com 4 cadeiras (0 embaixo, 1 à esquerda, 2 em cima, 3 à direita) */
+.mesa-redonda { position: relative; width: 100%; max-width: 470px; aspect-ratio: 1; margin: 4px auto; }
+.mesa-tampo {
+  position: absolute;
+  inset: 25%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #2c2c2e, #1c1c1e 72%);
+  box-shadow: inset 0 0 0 10px #232325, inset 0 0 0 11px var(--line), 0 22px 50px rgba(0, 0, 0, 0.7);
+}
+.mesa-par { position: absolute; border: 0 dashed var(--surface-3); }
+.mesa-par.vertical { left: 50%; top: 9%; bottom: 9%; border-left-width: 2px; margin-left: -1px; }
+.mesa-par.horizontal { top: 50%; left: 9%; right: 9%; border-top-width: 2px; margin-top: -1px; }
+.mesa-par.nos { border-color: rgba(48, 209, 88, 0.6); }
+.mesa-par.eles { border-color: rgba(255, 159, 10, 0.5); }
+.mesa-monte { position: absolute; left: 50%; top: 50%; width: 46px; height: 66px; transform: translate(-50%, -50%); }
+.mesa-monte .card { position: absolute; inset: 0; }
+.mesa-monte .card:first-child { transform: rotate(-12deg); }
+.mesa-monte .card:last-child { transform: rotate(8deg); }
+.cadeira { position: absolute; width: 128px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
+.cadeira.pos-0 { left: 50%; bottom: 0; transform: translateX(-50%); }
+.cadeira.pos-2 { left: 50%; top: 0; transform: translateX(-50%); }
+.cadeira.pos-1 { left: 0; top: 50%; transform: translateY(-50%); }
+.cadeira.pos-3 { right: 0; top: 50%; transform: translateY(-50%); }
+button.assento {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 2px solid var(--surface-3);
+  margin-bottom: 3px;
+}
+button.assento:disabled { opacity: 1; cursor: default; }
+.assento .letra { font-size: 26px; font-weight: 600; color: var(--text); }
+.assento svg { width: 30px; height: 30px; }
+.assento .bot { display: flex; color: var(--muted); }
+.assento .sentar { display: none; flex-direction: column; align-items: center; gap: 1px; color: var(--text); }
+.assento .sentar svg { width: 20px; height: 20px; }
+.assento .sentar small { font-size: 11px; font-weight: 600; }
+.cadeira.livre button.assento { border-style: dashed; background: var(--surface); }
+.cadeira.livre button.assento:hover:not(:disabled) { border-color: var(--text-2); }
+.cadeira.livre button.assento:hover:not(:disabled) .bot { display: none; }
+.cadeira.livre button.assento:hover:not(:disabled) .sentar { display: flex; }
+.cadeira.minha button.assento { border-color: var(--text); background: var(--card); }
+.cadeira.minha .assento .letra { color: #000; }
+.cadeira.dupla button.assento { border-color: var(--green); }
+.cadeira.adv button.assento { border-color: var(--orange); }
+.cadeira-nome { font-size: 14px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cadeira-nome .coroa { color: var(--yellow); font-size: 12px; }
+.cadeira-papel { font-size: 12px; color: var(--muted); }
+.cadeira-papel.dupla { color: var(--green); }
+.cadeira-papel.adv { color: var(--orange); }
+.cadeira-papel.minha { color: var(--text); }
+.cadeira select {
+  margin-top: 3px;
+  height: 30px;
+  border-radius: 10px;
+  border: none;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.sala-rodape { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.sala-rodape button.btn-primary { min-width: 220px; }
+.telas p.sem-cadeira { font-size: 13px; }
+@media (max-width: 520px) {
+  .cadeira { width: 96px; }
+  button.assento { width: 56px; height: 56px; }
+  .mesa-tampo { inset: 27%; }
+}
 
 /* ---------- Telas menores ---------- */
 @media (max-width: 1100px) {

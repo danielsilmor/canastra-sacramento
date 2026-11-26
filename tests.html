@@ -25,6 +25,9 @@
   <script src="js/arena.js"></script>
   <script src="js/historico.js"></script>
   <script src="js/analise.js"></script>
+  <script src="js/rede.js"></script>
+  <script src="js/mesa.js"></script>
+  <script src="js/espelho.js"></script>
   <script>
     const results = [];
     function check(name, condition, detail = '') {
@@ -647,7 +650,192 @@
       return { rounds, errors, bates };
     }
 
+    // --- Modo online: nomes e salas (banco de mentira na memória, várias "pessoas" na mesma página) ---
+    async function testarRede() {
+      const espera = () => new Promise((ok) => setTimeout(ok, 0));
+      const banco = new BancoMemoria();
+      const pessoa = async (uid, nome) => {
+        const p = Object.create(Rede);
+        await p.conectar(Rede.memoria(banco, uid));
+        if (nome) await p.reservarNome(nome);
+        return p;
+      };
+      const ler = async (id) => ({ id, ...(await banco.ler(`salas/${id}`)) });
+
+      const ana = await pessoa('u-ana');
+      const beto = await pessoa('u-beto');
+      const n1 = await ana.reservarNome('Ana  Lúcia');
+      const n2 = await beto.reservarNome('ana lucia');
+      const n3 = await beto.reservarNome('x');
+      const n4 = await beto.reservarNome('Beto');
+      check('Online: nome não pode repetir (nem com outro acento, maiúscula ou espaço)',
+        n1.ok && n1.nome === 'Ana Lúcia' && !n2.ok && !n3.ok && n4.ok, [n2.erro, n3.erro].join(' | '));
+
+      const sala = await ana.criarSala('Mesa 1');
+      let lista = [];
+      const parar = beto.ouvirSalas((l) => { lista = l; });
+      await espera();
+      const repetida = await beto.criarSala('mesa  1', lista);
+      check('Online: a sala criada aparece na lista e o nome da sala não pode repetir',
+        sala.ok && lista.length === 1 && lista[0].nome === 'Mesa 1' && !repetida.ok, repetida.erro);
+
+      await beto.entrarSala(sala.id);
+      const sentouB = await beto.sentar(await ler(sala.id), 1);
+      const sentouA = await ana.sentar(await ler(sala.id), 0);
+      const ocupada = await beto.sentar(await ler(sala.id), 0);
+      const trocou = await beto.sentar(await ler(sala.id), 2);
+      let s = await ler(sala.id);
+      check('Online: senta em cadeira livre, não em ocupada; trocar de cadeira libera a anterior',
+        sentouB.ok && sentouA.ok && !ocupada.ok && trocou.ok && s.lugares[0].uid === 'u-ana' &&
+        s.lugares[2].uid === 'u-beto' && !s.lugares[1] && Rede.pessoasSentadas(s) === 2, JSON.stringify(s.lugares));
+
+      const nivelB = await beto.definirNivel(s, 1, 'mestre');
+      const nivelA = await ana.definirNivel(s, 1, 'mestre');
+      const comecaB = await beto.comecar(await ler(sala.id));
+      s = await ler(sala.id);
+      check('Online: só quem criou a sala escolhe o nível dos bots e começa a partida',
+        !nivelB.ok && nivelA.ok && s.niveis[1] === 'mestre' && !comecaB.ok);
+
+      await beto.levantar(s);
+      const sozinha = await ana.comecar(await ler(sala.id));
+      await beto.sentar(await ler(sala.id), 2);
+      const comeca = await ana.comecar(await ler(sala.id));
+      const carla = await pessoa('u-carla', 'Carla');
+      const depoisDeComecar = await carla.entrarSala(sala.id);
+      s = await ler(sala.id);
+      check('Online: precisa de 2 pessoas sentadas; depois que começa, ninguém mais entra',
+        !sozinha.ok && comeca.ok && s.estado === 'jogando' && !depoisDeComecar.ok, sozinha.erro);
+
+      // Quedas: quem cai perde a cadeira (só a que ocupava) e o nome; se quem criou cair, a sala fecha.
+      const sala2 = await carla.criarSala('Mesa 2');
+      const dani = await pessoa('u-dani', 'Dani');
+      const edu = await pessoa('u-edu', 'Edu');
+      await dani.entrarSala(sala2.id);
+      await edu.entrarSala(sala2.id);
+      await dani.sentar(await ler(sala2.id), 3);
+      await dani.sentar(await ler(sala2.id), 1); // trocou: a cadeira 3 ficou livre
+      await edu.sentar(await ler(sala2.id), 3);
+      banco.desconectar('u-dani');
+      const s2 = await ler(sala2.id);
+      const nomeLivre = banco.ler('nomes/dani') === null;
+      banco.desconectar('u-carla');
+      const fechou = banco.ler(`salas/${sala2.id}`) === null;
+      check('Online: quem cai perde a cadeira e o nome; se quem criou a sala cair, ela fecha',
+        !s2.lugares[1] && s2.lugares[3] && s2.lugares[3].uid === 'u-edu' && !s2.presentes['u-dani'] && nomeLivre && fechou,
+        JSON.stringify(s2.lugares));
+      parar();
+    }
+
+    // --- Partida online: a mesa no navegador de quem criou a sala e a cópia de cada pessoa ---
+    async function testarPartidaOnline() {
+      const espera = () => new Promise((ok) => setTimeout(ok, 1));
+      const banco = new BancoMemoria();
+      const pessoa = async (uid, nome) => {
+        const p = Object.create(Rede);
+        await p.conectar(Rede.memoria(banco, uid));
+        await p.reservarNome(nome);
+        return p;
+      };
+      const ana = await pessoa('u-ana', 'Ana'); // cria a sala e senta embaixo (cadeira 0)
+      const beto = await pessoa('u-beto', 'Beto'); // senta à esquerda da Ana (cadeira 1): adversário
+      const criada = await ana.criarSala('Teste online');
+      const ler = () => ({ id: criada.id, ...banco.ler(`salas/${criada.id}`) });
+      await beto.entrarSala(criada.id);
+      await ana.sentar(ler(), 0);
+      await beto.sentar(ler(), 1);
+      await ana.comecar(ler());
+      const sala = ler();
+      const opcoes = { sala, rede: null, tela: false, passo: 0, guardarHistorico: false };
+      const ea = Object.create(Espelho).iniciar({ ...opcoes, meu: 0, nome: 'Ana', anfitriao: true, rede: ana });
+      const eb = Object.create(Espelho).iniciar({ ...opcoes, meu: 1, nome: 'Beto', rede: beto });
+      const real = ea.mesa.g;
+
+      // Cada pessoa compra do monte e descarta a primeira carta que puder (os bots jogam normal).
+      const jogar = (e) => {
+        const g = e.g;
+        if (!g || e.pendente) return;
+        if (g.phase === 'roundEnd') {
+          if (e.prontoNaRodada !== g.round) {
+            e.prontoNaRodada = g.round;
+            e.pronto();
+          }
+          return;
+        }
+        if (g.current !== 0) return;
+        if (g.phase === 'draw') {
+          if (g.stock.length) g.drawFromStock(0);
+          else g.endByEmptyStock(0);
+          return;
+        }
+        for (const c of g.players[0].hand) if (g.discard(0, c.id).ok) return;
+      };
+      const ids = (cs) => cs.map((c) => c.id).sort((a, b) => a - b).join(',');
+      const confere = (e) => {
+        const g = e.g;
+        const m = e.meu;
+        if (ids(g.players[0].hand) !== ids(real.players[m].hand)) return 'mão';
+        for (let v = 1; v < 4; v++) if (g.players[v].hand.length !== real.players[(v + m) % 4].hand.length) return 'cartas dos outros';
+        if (ids(g.discardPile) !== ids(real.discardPile) || g.stock.length !== real.stock.length) return 'lixo ou monte';
+        for (let t = 0; t < 2; t++) {
+          const rt = real.teams[(t + (m % 2)) % 2];
+          if (g.teams[t].melds.map((x) => ids(x.cards)).join('|') !== rt.melds.map((x) => ids(x.cards)).join('|')) return 'jogos';
+          if (g.teams[t].score !== rt.score) return 'placar';
+        }
+        if (g.current !== e.vista(real.current) || g.phase !== real.phase) return 'vez';
+        return null;
+      };
+      let conferencias = 0;
+      let diferenca = null;
+      let vazou = null;
+      let rodada1 = null;
+      let distribuicao = null;
+      for (let i = 0; i < 20000 && !diferenca && !vazou; i++) {
+        jogar(ea);
+        jogar(eb);
+        await espera();
+        const atual = ea.mesa.seq;
+        if (eb.g && !distribuicao) {
+          distribuicao = eb.g.players.every((p) => p.hand.length >= 15) && eb.g.players[0].hand.every((c) => !c.oculta) &&
+            [1, 2, 3].every((v) => eb.g.players[v].hand.every((c) => c.oculta)) && eb.g.stock.every((c) => c.oculta);
+        }
+        if (ea.ultimoSeq === atual && eb.ultimoSeq === atual) {
+          diferenca = confere(ea) || confere(eb);
+          if (diferenca) diferenca = `${diferenca} (rodada ${real.round}, publicação ${atual})`;
+          conferencias++;
+          const est = banco.ler(`jogos/${sala.id}/estado`);
+          if ((est.eventos || []).some((ev) => (ev.type === 'draw' && ev.card !== undefined) || ev.hands)) vazou = 'compra ou distribuição';
+          if (est.fase !== 'roundEnd' && est.maosFinais) vazou = 'mãos no meio da rodada';
+          if (banco.ler(`jogos/${sala.id}/maos/2`) || banco.ler(`jogos/${sala.id}/maos/3`)) vazou = 'mão de bot';
+          if (est.fase !== 'roundEnd' && [1, 2, 3].some((v) => eb.g.players[v].hand.some((c) => !c.oculta))) vazou = 'cartas dos outros na cópia';
+        }
+        if (real.round === 1 && real.phase === 'roundEnd' && !rodada1) rodada1 = { ...real.lastRound };
+        if (real.round === 2 && eb.g && eb.g.round === 2 && eb.g.phase === 'play' && ea.ultimoSeq === atual && eb.ultimoSeq === atual) break;
+      }
+      check('Online: cada um recebe 15 cartas e só vê a própria mão (as dos outros e o monte ficam virados)', distribuicao);
+      check('Online: a cópia de cada pessoa confere com a mesa de verdade (mãos, lixo, monte, jogos, placar e vez)',
+        !diferenca && conferencias > 50, diferenca || `${conferencias} conferências`);
+      check('Online: ninguém recebe as cartas dos outros nem as do monte', !vazou, vazou);
+      check('Online: a rodada termina e a próxima começa quando todos clicam em "Próxima rodada"',
+        rodada1 && real.round === 2 && eb.g.round === 2 && ea.g.round === 2, `rodada ${real.round}`);
+
+      // Beto sai no meio da partida: um bot assume a cadeira dele e o jogo continua.
+      eb.sair();
+      eb.encerrar();
+      for (let i = 0; i < 200 && ea.mesa.humanos.includes(1); i++) await espera();
+      const virou = !ea.mesa.humanos.includes(1) && ea.mesa.niveis[1] === sala.niveis[1];
+      const antes = real.events.length;
+      for (let i = 0; i < 3000 && real.events.length < antes + 6; i++) {
+        jogar(ea);
+        await espera();
+      }
+      check('Online: quem sai vira bot e a partida continua', virou && real.events.length >= antes + 6,
+        `humanos: ${ea.mesa.humanos.join(',')}`);
+      ea.encerrar();
+    }
+
     (async () => {
+      await testarRede();
+      await testarPartidaOnline();
       let r = await simulate(20);
       check(`20 partidas simuladas com bots Moderados sem erros (${r.rounds} rodadas, ${r.bates} terminaram com bate)`,
         r.errors.length === 0, r.errors.slice(0, 3).join(' | '));

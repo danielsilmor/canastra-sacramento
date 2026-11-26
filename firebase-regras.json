@@ -1,0 +1,51 @@
+{
+  "rules": {
+    "nomes": {
+      ".read": "auth != null",
+      "$chave": {
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
+        ".validate": "newData.child('uid').val() === auth.uid && newData.child('nome').isString() && newData.child('nome').val().length >= 2 && newData.child('nome').val().length <= 16"
+      }
+    },
+    "salas": {
+      ".read": "auth != null",
+      "$sala": {
+        ".write": "auth != null && (data.exists() ? data.child('criador/uid').val() === auth.uid : newData.child('criador/uid').val() === auth.uid)",
+        "nome": {
+          ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 24"
+        },
+        "presentes": {
+          "$uid": {
+            ".write": "auth != null && $uid === auth.uid && data.parent().parent().child('criador').exists()",
+            ".validate": "newData.isString()"
+          }
+        },
+        "lugares": {
+          "$lugar": {
+            ".write": "auth != null && data.parent().parent().child('estado').val() === 'esperando' && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.exists() && data.child('uid').val() === auth.uid && !newData.exists()))",
+            ".validate": "$lugar.matches(/^[0-3]$/) && newData.child('nome').isString()"
+          }
+        }
+      }
+    },
+    "jogos": {
+      "$sala": {
+        ".write": "auth != null && (root.child('salas').child($sala).child('criador/uid').val() === auth.uid || data.child('anfitriao').val() === auth.uid)",
+        "estado": {
+          ".read": "auth != null"
+        },
+        "maos": {
+          "$lugar": {
+            ".read": "auth != null && root.child('salas').child($sala).child('lugares').child($lugar).child('uid').val() === auth.uid"
+          }
+        },
+        "acoes": {
+          ".read": "auth != null && (root.child('salas').child($sala).child('criador/uid').val() === auth.uid || data.parent().child('anfitriao').val() === auth.uid)",
+          "$lugar": {
+            ".write": "auth != null && root.child('salas').child($sala).child('lugares').child($lugar).child('uid').val() === auth.uid"
+          }
+        }
+      }
+    }
+  }
+}
